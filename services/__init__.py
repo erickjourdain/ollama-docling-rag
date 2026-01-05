@@ -1,6 +1,6 @@
-from .chroma_service import ChromaDBService
 from .conversion_service import ConversionService
 from .chunking_service import ChunkingService
-from .query_service import QueryService
+from .lancedb_service import LanceDBService
+from .ollama_service import OllamaService
 
-__all__ = ["ChromaDBService", "ConversionService", "ChunkingService", "QueryService"]
+__all__ = ["ConversionService", "ChunkingService", "LanceDBService", "OllamaService"]

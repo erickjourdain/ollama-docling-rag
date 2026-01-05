@@ -1,15 +1,19 @@
-from ollama import Client
 from pathlib import Path
+
+from ollama import GenerateResponse
+from dotenv import load_dotenv
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from models import HealthResponse, ProcessingResponse, QueryRequest
+from models import HealthResponse, Model, ProcessingResponse, QueryRequest
 from services import (
-    ChromaDBService,
     ConversionService,
     ChunkingService,
-    QueryService
+    LanceDBService,
+    OllamaService
 )
 from config import settings
+
+load_dotenv()
 
 router = APIRouter()
 
@@ -40,24 +44,46 @@ async def process_pdf(
             f.write(pdf_bytes)
 
         # Conversion du fichier pdf
-        conversion_result = ConversionService().convert_pdf_to_md(temp_dir / file.filename, collection_name)
+        conversion_service = ConversionService()
+        conversion_result = conversion_service.convert_pdf_to_md(temp_dir / file.filename, collection_name)
         # Suppression du fichier temporaire
         (temp_dir / file.filename).unlink()
+
+        # Vérifie l'existance de la collection / table
+        lancedb_service = LanceDBService()
+        liste_collections = lancedb_service.list_tables()
+        if collection_name not in liste_collections:
+            lancedb_service.create_table(collection_name)
+
         # Chunk du document
-        chunknig_result = ChunkingService().basic_chunking(
-            document=conversion_result.document, 
-            collection_name=collection_name, 
-            file_name=file.filename
-        )
+        chunking_service = ChunkingService(filename=file.filename)
+        chunking_result = chunking_service.basic_chunking(document=conversion_result.document)
+
+        # Enregistrement des chunks dans la base de données
+        lancedb_service.insert_data(chunks=chunking_result.chunks, collection_name=collection_name)
 
         return ProcessingResponse(
             success=True, 
             detail="PDF traité et stocké avec succès.",
             conversion_time=conversion_result.conversion_time,
-            embedding_time=chunknig_result.embedding_time
+            embedding_time=chunking_result.embedding_time
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors du traitement du PDF: {str(e)}")
+    
+@router.delete(
+        "/collection",
+        summary="Supprime une collection / table",
+        description="""Supression d'une collection / table de la base de données""",
+        tags=["Base de données"]
+)
+async def delete_collection(collection_name: str) -> bool:
+    try:
+        lancedb_service = LanceDBService()
+        lancedb_service.delete_table(collection_name=collection_name)
+        return True
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la suppression de la table: {str(e)}")
     
 @router.post(
         "/query",
@@ -69,13 +95,33 @@ async def process_pdf(
         """,
         tags=["Query base connaissances"]
 )
-async def query(req: QueryRequest):
+async def query(req: QueryRequest) -> GenerateResponse:
+    """Exécution d'une requête utilisateur sur le système RAG
+
+    Args:
+        req (QueryRequest): Information sur la requête à effectuer
+            query: requête de l'utilisateur
+            collection_name: nom de la collection à interroger
+            model: nom du modèle à utiliser (optionel)
+
+    Raises:
+        HTTPException: Erreur lors de l'éxecution de la fonction
+
+    Returns:
+        GenerateResponse | None: Réponse 
+    """
     try:
-        chunks = QueryService().query_db(req.query, req.collection_name)
-        chunks = QueryService().rerank_chunks_llm(query=req.query,chunks=chunks)
-        context = QueryService().define_context(chunks)
-        response = QueryService().create_answer(context=context, query=req.query)
-        return response.response
+        lancedb_service = LanceDBService()
+        ollama_service =  OllamaService()
+        model = req.model if req.model is not None else settings.ollama_model
+        # Tester présence du modèle
+        models = ollama_service.list_models()
+        vectordb_query = ollama_service.vectordb_query(req.query, model=model)
+        chunks = lancedb_service.query_db(vectordb_query, req.collection_name)
+        if len(chunks):
+            chunks = ollama_service.rerank_chunks_llm(query=req.query,chunks=chunks)
+        reponse = ollama_service.create_answer(chunks=chunks, query=req.query, model=model)
+        return reponse
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors du traitement du PDF: {str(e)}") 
 
@@ -90,25 +136,40 @@ async def query(req: QueryRequest):
     - Base de données ChromaDB
     - Modèles Ollama disponibles
     """,
-    tags=["Système"])
+    tags=["Système"]
+)
 async def health_check() -> HealthResponse:
     try:
-        client = Client(host=settings.ollama_base_url)
-        models_list = client.list()
+        ollama_service = OllamaService()
+        models_list = ollama_service.list_models()
         ollama_status = "ok"
-        models = [model['model'] for model in models_list.get('models', [])]
     except Exception:
         raise HTTPException(status_code=503, detail="serveur ollama injoignable")
     
     try:
-        ChromaDBService().list_collections()
-        chromadb_status = "ok"
+        lancedb_service = LanceDBService()
+        lancedb_service.list_tables()
+        lancedb_service = "ok"
     except Exception:
         raise HTTPException(status_code=503, detail="erreur connexion ChromaDB")
     
     return HealthResponse(
         api="ok",
         ollama=ollama_status,
-        chromadb=chromadb_status,
-        models_available=models
+        lancedb=lancedb_service,
+        models_available=models_list
     )
+
+@router.get(
+    "/models",
+    response_model=list[Model],
+    summary="Liste des modèles LLM disponibles",
+    description="Récupère la liste des modèles disponibles pour interrogation",
+    tags=["Système"]
+)
+async def list_models() -> list[Model]:
+    try:
+        ollama_service = OllamaService()
+        return ollama_service.list_models()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors du chargement des modèles: {str(e)}")

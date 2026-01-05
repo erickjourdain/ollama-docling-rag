@@ -1,21 +1,11 @@
 from pydantic import BaseModel, Field
 from lancedb.embeddings import get_registry
 from lancedb.pydantic import LanceModel, Vector
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 from docling_core.types.doc.document import DoclingDocument
 
 from config import settings
-
-class HealthResponse(BaseModel):
-    """État de santé de l'API"""
-    api: str = Field(..., description="État de l'API FastAPI")
-    ollama: str = Field(..., description="État du serveur Ollama")
-    chromadb: str = Field(..., description="État de ChromaDB")
-    models_available: List[str] = Field(
-        default=[],
-        description="Modèles Ollama disponibles"
-    )
 
 class ProcessingResponse(BaseModel):
     """Réponse après le traitement d'un PDF"""
@@ -30,16 +20,22 @@ class ConvertPdfResponse(BaseModel):
     markdown: Path | str = Field(..., description="Contenu Markdown converti à partir du PDF")
     conversion_time: float = Field(..., description="Durée pour la conversion en secondes")
 
-class ChunkingResponse(BaseModel):
-    """Réponse chunking et embeddings"""
-    embedding_time: float = Field(..., description="Durée de l'embedding")
-
 class ChunkMetada(LanceModel):
     """Les métadonnéess à stocker dans la base vectorielles"""
     filename: str | None = Field(..., description="Le nom du fichier ont est extrait le chucnk")
     page_numbers: List[int] | None = Field(..., description="La liste des pages concernées par le chunk")
     context: str | None = Field(..., description="Le titre de la section contenant le chunck")
 
+class ChunkWithoutVector(LanceModel):
+    """Chunk incluant le contenu et les métadonnées"""
+    text: str = Field(..., description="Le contenu texte du chunk")
+    metadata: ChunkMetada
+
+class ChunkingResponse(LanceModel):
+    """Réponse chunking et embeddings"""
+    chunks: List[ChunkWithoutVector]
+    embedding_time: float = Field(..., description="Durée de l'embedding")
+    
 func = get_registry().get("ollama").create(name=settings.ollama_embedding_model)
 
 class Chunks(LanceModel):
@@ -51,3 +47,15 @@ class QueryRequest(BaseModel):
     """Requête pour l'interrogation de la base de données"""
     query: str = Field(..., description="La requête à éxecuter")
     collection_name: str = Field(..., description="La collection à interroger")
+    model: Optional[str] = Field(None, description=f"Le modèle à utiliser pour la requête par défaut '{settings.ollama_model}'")
+
+class Model(BaseModel):
+    nom: str | None = Field(..., description="Le nom du modèle")
+    embed: bool = Field(..., description="Modèle de type embedding")
+
+class HealthResponse(BaseModel):
+    """État de santé de l'API"""
+    api: str = Field(..., description="État de l'API FastAPI")
+    ollama: str = Field(..., description="État du serveur Ollama")
+    lancedb: str = Field(..., description="État Base de données")
+    models_available: list[Model] = Field(..., description="Modèles Ollama disponibles")

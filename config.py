@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     chromadb_persist_directory: str = "./chroma_db"
 
     # Ollama
-    ollama_model: str = "qwen2.5:7b"
+    ollama_model: str = "gemma3:4b"
     ollama_embedding_model: str = "mxbai-embed-large:latest"
 
     # API
