@@ -6,19 +6,16 @@ class Settings(BaseSettings):
     md_dir : str = "./data/files"
     image_resolution_scale: float = 2.0
 
-    # lancedb
-    lancedb_dir : str = "./lancedb"
+    # DB dir
+    db_dir : str = "./lancedb"
 
-    # Chromadb
-    chromadb_persist_directory: str = "./chroma_db"
-
-    # Ollama
-    ollama_model: str = "gemma3:4b"
-    ollama_embedding_model: str = "mxbai-embed-large:latest"
+    # Modèle LLM
+    llm_model: str = "gemma3:4b"
+    llm_embedding_model: str = "mxbai-embed-large:latest"
 
     # API
     api_title: str = "Ollama Docling RAG"
     api_version: str = "1.0.0"
-    api_description: str = "API de gestion d'un système de recherche d'information basé sur Docling, Ollama et Chromadb."
+    api_description: str = "API de gestion d'un système de recherche d'information basé sur Docling, Ollama et Lancedb."
 
 settings = Settings()

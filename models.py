@@ -36,26 +36,32 @@ class ChunkingResponse(LanceModel):
     chunks: List[ChunkWithoutVector]
     embedding_time: float = Field(..., description="Durée de l'embedding")
     
-func = get_registry().get("ollama").create(name=settings.ollama_embedding_model)
+func = get_registry().get("ollama").create(name=settings.llm_embedding_model)
 
 class Chunks(LanceModel):
+    """Chunk pour stockage en base de données"""
     text: str = func.SourceField()
     vector: Vector(func.ndims()) = func.VectorField()  # type: ignore
     metadata: ChunkMetada
+
+class CollectionCreate(BaseModel):
+    """Requête pour la création d'une collection"""
+    collection_name: str = Field(..., description="Nom de la collection à créer")
 
 class QueryRequest(BaseModel):
     """Requête pour l'interrogation de la base de données"""
     query: str = Field(..., description="La requête à éxecuter")
     collection_name: str = Field(..., description="La collection à interroger")
-    model: Optional[str] = Field(None, description=f"Le modèle à utiliser pour la requête par défaut '{settings.ollama_model}'")
+    model: Optional[str] = Field(None, description=f"Le modèle à utiliser pour la requête par défaut '{settings.llm_model}'")
 
 class Model(BaseModel):
+    """Modèle de gestion des modèles LLM disponibles"""
     nom: str | None = Field(..., description="Le nom du modèle")
     embed: bool = Field(..., description="Modèle de type embedding")
 
 class HealthResponse(BaseModel):
     """État de santé de l'API"""
     api: str = Field(..., description="État de l'API FastAPI")
-    ollama: str = Field(..., description="État du serveur Ollama")
-    lancedb: str = Field(..., description="État Base de données")
+    llm: str = Field(..., description="État du serveur Ollama")
+    db: str = Field(..., description="État Base de données")
     models_available: list[Model] = Field(..., description="Modèles Ollama disponibles")

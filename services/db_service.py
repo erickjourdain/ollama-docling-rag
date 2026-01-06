@@ -1,7 +1,6 @@
 from typing import Iterable, List
 
 import lancedb
-from fastapi import HTTPException
 from dotenv import load_dotenv
 
 from config import settings
@@ -9,11 +8,11 @@ from models import ChunkWithoutVector, Chunks
 
 load_dotenv()
 
-class LanceDBService:
+class DbService:
     """Service pour l'interrogation de la base de données vectorielles"""
 
     def __init__(self):
-        self.db = lancedb.connect(settings.lancedb_dir)
+        self.db = lancedb.connect(settings.db_dir)
 
     def list_tables(self) -> Iterable[str]:
         """Liste les tables présentes dans la base de données LanceDB
@@ -27,10 +26,10 @@ class LanceDBService:
         try:
             tables = self.db.table_names()
             return tables
-        except Exception:
-            raise HTTPException(status_code=500, detail="Erreur lors de la connection à la base de données")
+        except Exception as e:
+            raise Exception(e)
 
-    def create_table(self, collection_name: str):
+    def create_table(self, collection_name: str) -> bool:
         """Création d'une collection / table
 
         Args:
@@ -45,10 +44,11 @@ class LanceDBService:
                 schema=Chunks, 
                 mode="overwrite"
             )
+            return True
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Impossible de créer la collection: {str(e)}")
-
-    def delete_table(self, collection_name: str):
+            raise Exception(e)
+        
+    def delete_table(self, collection_name: str) -> bool:
         """Suppression d'une collection / table
 
         Args:
@@ -59,9 +59,10 @@ class LanceDBService:
         """
         try:
             self.db.drop_table(collection_name)
+            return True
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Impossible de supprimer la collection: {str(e)}")
-
+            raise Exception(e)
+        
     def insert_data(self, chunks: List[ChunkWithoutVector], collection_name: str):
         """Insertion de données dans la base de données
 
@@ -76,8 +77,8 @@ class LanceDBService:
             table = self.db.open_table(name=collection_name)
             table.add(chunks)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Impossible d'écrire les données dans la base de données: {str(e)}")
-
+            raise Exception(e)
+        
     def query_db(self, query: str, collection_name: str, limit: int = 5) -> List[Chunks]:
         """_summary_
 
@@ -96,4 +97,4 @@ class LanceDBService:
             return table.search(query=query).limit(limit).to_pydantic(Chunks)
         
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erreur lors de la recherche vectorielle: {str(e)}")
+            raise Exception(e)

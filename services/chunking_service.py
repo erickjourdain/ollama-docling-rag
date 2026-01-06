@@ -1,8 +1,6 @@
 import time
 from typing import List, Set
 
-from fastapi import HTTPException
-
 from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
 from docling_core.transforms.chunker.base import BaseChunk
 from docling_core.types.doc.document import DoclingDocument
@@ -36,37 +34,46 @@ class ChunkingService:
         Args:
             chunk (BaseChunk): le chunk Docling à traiter
 
+        Raises:
+            Exception: 500 - errreur lors de l'éxécution de la fonction
+
         Returns:
             dict: le dictionnaire avec le texte et les metadonnées
         """
-        # Extraction du texte
-        text = chunk.text.strip()
-        
-        # Noeud avec les métadonnées du chunk
-        node = getattr(chunk, "meta")
-        # Récupère la hiérarchie des titres
-        sections: Set[str] = set()
-        if node.headings:
-            for head in node.headings:
-                section = head.text if hasattr(head, "text") else head
-                sections.add(section)
-        full_section_path = ">".join(sections)
 
-        # Récupère les numéros de page
-        pages: Set[int] = set()
-        for prov in node.doc_items:
-            if hasattr(prov, 'prov') and prov.prov:
-                for p in prov.prov:
-                    pages.add(p.page_no)
+        try:
+            # Extraction du texte
+            text = chunk.text.strip()
+            
+            # Noeud avec les métadonnées du chunk
+            node = getattr(chunk, "meta")
+            # Récupère la hiérarchie des titres
+            sections: Set[str] = set()
+            if node.headings:
+                for head in node.headings:
+                    section = head.text if hasattr(head, "text") else head
+                    sections.add(section)
+            full_section_path = ">".join(sections)
 
-        return ChunkWithoutVector(
-            text=text,
-            metadata=ChunkMetada(
-                filename=self.filename,
-                page_numbers=sorted(pages),
-                context= full_section_path
+            # Récupère les numéros de page
+            pages: Set[int] = set()
+            for prov in node.doc_items:
+                if hasattr(prov, 'prov') and prov.prov:
+                    for p in prov.prov:
+                        pages.add(p.page_no)
+
+            return ChunkWithoutVector(
+                text=text,
+                metadata=ChunkMetada(
+                    filename=self.filename,
+                    page_numbers=sorted(pages),
+                    context= full_section_path
+                )
             )
-        )
+
+        except Exception as e:
+            raise Exception(e)
+        
 
     def basic_chunking(self, document: DoclingDocument) -> ChunkingResponse:
         """Chunking du document Docling
@@ -75,7 +82,7 @@ class ChunkingService:
             document (DoclingDocument): le document à chunker
  
         Raises:
-            HTTPException: 500 - errreur lors de l'éxécution de la fonction
+            Exception: 500 - errreur lors de l'éxécution de la fonction
 
         Returns:
             ChunkingResponse: durée de l'éxécution de la fonction
@@ -125,4 +132,5 @@ class ChunkingService:
             )
 
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erreur lors du traitement du PDF (chunking): {str(e)}")
+            raise Exception(e)
+        

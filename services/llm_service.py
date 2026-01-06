@@ -2,7 +2,6 @@ import os
 from typing import List
 
 from dotenv import load_dotenv
-from fastapi import HTTPException
 from ollama import Client, GenerateResponse
 
 from models import Chunks, Model
@@ -10,13 +9,13 @@ from config import settings
 
 load_dotenv()
 
-class OllamaService:
+class LlmService:
     """_summary_Service pour l'interrogation du LLM"""
 
     def __init__(self):
         self.llm_client = Client(os.environ.get("OLLAMA_BASE_URL"))
 
-    def vectordb_query(self, query: str, model: str = settings.ollama_model) -> str:
+    def vectordb_query(self, query: str, model: str = settings.llm_model) -> str:
         """Restructuration de la requête pour interrogation de la base de données vectorielle
 
         Args:
@@ -53,9 +52,10 @@ class OllamaService:
             )
 
             return reponse.response
+        
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erreur lors du traitement du PDF (chunking): {str(e)}")
-
+            raise Exception(e)
+        
     def __define_context(self, chunks: List[Chunks]) -> str:
         """ Définition du contexte à partir des chunks fournis par la base vectorielle
 
@@ -88,11 +88,11 @@ class OllamaService:
                     return full_context
             
             return str()
-
+        
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erreur lors du traitement du PDF (chunking): {str(e)}")
-
-    def create_answer(self, chunks: List[Chunks], query: str, model: str = settings.ollama_model) -> GenerateResponse:
+            raise Exception(e)
+        
+    def create_answer(self, chunks: List[Chunks], query: str, model: str = settings.llm_model) -> GenerateResponse:
         """Construction de la réponse à la demande à partir des données fournies par la base vectorielle
 
         Args:
@@ -148,11 +148,11 @@ class OllamaService:
                 think=False,
                 options={"temperature": 0}
             )
-
+        
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erreur lors de l'interrogation du llm: {str(e)}")
-
-    def rerank_chunks_llm(self, query: str, chunks: list[Chunks], limit: int = 5, model: str = settings.ollama_model) -> list[Chunks]:
+            raise Exception(e)
+        
+    def rerank_chunks_llm(self, query: str, chunks: list[Chunks], limit: int = 5) -> list[Chunks]:
         """ Reranking des réponses (chunks) en fonction de leur pertinence
 
         Args:
@@ -191,7 +191,7 @@ class OllamaService:
             """
 
             response = self.llm_client.generate(
-                model=settings.ollama_model,
+                model=settings.llm_model,
                 prompt=prompt,
                 options={"temperature": 0}
             )
@@ -203,9 +203,10 @@ class OllamaService:
             ]
 
             return [chunks[i] for i in ranked_indices[:limit]]
+        
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erreur lors de la recherche vectorielle: {str(e)}")
-
+            raise Exception(e)
+        
     def list_models(self) -> list[Model]:
         """Récupération des modèles disponibles
 
@@ -229,5 +230,6 @@ class OllamaService:
                     embed=embed
                 ))
             return models
+        
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erreur lors du chargement des modèles: {str(e)}")
+            raise Exception(e)

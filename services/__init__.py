@@ -1,6 +1,6 @@
 from .conversion_service import ConversionService
 from .chunking_service import ChunkingService
-from .lancedb_service import LanceDBService
-from .ollama_service import OllamaService
+from .db_service import DbService
+from .llm_service import LlmService
 
-__all__ = ["ConversionService", "ChunkingService", "LanceDBService", "OllamaService"]
+__all__ = ["ConversionService", "ChunkingService", "DbService", "LlmService"]
