@@ -1,8 +1,8 @@
+from datetime import datetime
 from typing import Iterable
 from fastapi import APIRouter, HTTPException, status
 
-from schemas import CollectionCreate
-from schemas.schema import CollectionInfoResponse
+from schemas import CollectionInfo, CollectionCreate, CollectionInfoResponse
 from services import DbService
 
 router_collection = APIRouter(prefix="/collections", tags=["Collections"])
@@ -15,7 +15,10 @@ router_collection = APIRouter(prefix="/collections", tags=["Collections"])
 async def get_collections() -> Iterable[str]:
     try:
         db_service = DbService()
-        return db_service.list_tables()
+        return [
+            table for table in db_service.list_tables()
+            if table not in {"collections", "documents"}
+        ]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
@@ -40,7 +43,14 @@ async def new_collection(req: CollectionCreate) -> bool:
         )
     
     try:
-        db_service.create_table(req.collection_name)
+        db_service.create_chunk_table(req.collection_name)
+        collecion = CollectionInfo(
+            name=req.collection_name,
+            description=req.description,
+            created_date=datetime.now(),
+            user="erick jourdain",
+        )
+        db_service.insert_collection(collection=collecion)
         return True
     except HTTPException as e:
         raise HTTPException(
@@ -53,21 +63,16 @@ async def new_collection(req: CollectionCreate) -> bool:
         summary="Information sur la collection",
         description="Retourne les information sur la collection"
 )
-async def get_nb_docs(collection_name: str) -> CollectionInfoResponse:
+async def collection_info(collection_name: str) -> CollectionInfoResponse:
     try:
         db_service = DbService()
-        nb_docs = db_service.get_nb_documents(collection_name=collection_name)
-        return CollectionInfoResponse(
-            name=collection_name,
-            nb_docs=nb_docs
-        )
+        return db_service.get_collection_info(collection_name=collection_name)
     except HTTPException as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=f"Erreur lors de la lecture des information sur de la collection / table: {str(e)}"
         )
         
-
 @router_collection.delete(
         "",
         summary="Supprime une collection / table",

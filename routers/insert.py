@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from services import ConversionService, ChunkingService, DbService
-from schemas import ProcessingResponse, Document
+from schemas import ProcessingResponse, DocumentInfo
 from core.config import settings
 
 router_insert = APIRouter(prefix="/insert", tags=["Insertion fichier"])
@@ -26,6 +26,12 @@ async def process_pdf(
         raise HTTPException(status_code=400, detail="Le fichier doit être un PDF.")
     
     try:
+        # Vérification si le document est déjà dans la collection / table
+        db_service = DbService()
+        collection_info = db_service.get_collection_info(collection_name=collection_name)
+        if file.filename in [doc.filename for doc in collection_info.documents]:
+            raise Exception("Le fichier a déjà été inséré")
+
         # Enregistrement du fichier dans le répertoire temporaire
         pdf_bytes = await file.read()
         temp_dir = Path(settings.temp_directory)
@@ -40,29 +46,28 @@ async def process_pdf(
         (temp_dir / file.filename).unlink()
 
         # Vérifie l'existance de la collection / table
-        db_service = DbService()
         liste_collections = db_service.list_tables()
         if collection_name not in liste_collections:
-            db_service.create_table(collection_name)
+            db_service.create_chunk_table(collection_name)
 
         # Chunk du document
         chunking_service = ChunkingService(filename=file.filename)
         chunking_result = chunking_service.basic_chunking(document=conversion_result.document)
+
+        # Enregistrement des informations liées au document inséré
+        document = DocumentInfo(
+            filename=file.filename,
+            collection_name=collection_name,
+            insertion_date=datetime.now(),
+            user="erick jourdain"
+        )
+        db_service.insert_documents(collection_name=collection_name, document=document)
 
         # Enregistrement des chunks dans la base de données
         db_service.insert_data(
             chunks=chunking_result.chunks, 
             collection_name=collection_name
         )
-
-        # Enregistrement des informations liées au document inséré
-        document = Document(
-            filename=file.filename,
-            collection=collection_name,
-            date=datetime.now(),
-            user="erick jourdain"
-        )
-        db_service.insert_document(document=document)
         
         return ProcessingResponse(
             success=True, 

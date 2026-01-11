@@ -1,6 +1,6 @@
 import logging
 from fastapi import FastAPI
-from core.start import init_app
+from core.init import init_app
 from routers import router_collection, router_insert, router_query, router_system
 from core.config import settings
 

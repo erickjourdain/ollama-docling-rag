@@ -3,7 +3,7 @@ import lancedb
 from dotenv import load_dotenv
 
 from core.config import settings
-from schemas import ChunkWithoutVector, Chunks, Document
+from schemas import ChunkWithoutVector, Chunks, CollectionInfo, DocumentInfo, CollectionInfoResponse
 
 load_dotenv()
 
@@ -28,7 +28,7 @@ class DbService:
         except Exception as e:
             raise Exception(e)
 
-    def create_table(self, collection_name: str, doc: bool = False) -> bool:
+    def create_chunk_table(self, collection_name: str) -> bool:
         """Création d'une collection / table
 
         Args:
@@ -37,22 +37,41 @@ class DbService:
 
         Raises:
             Exception: Erreur lors de la création de la table
+
+        Returns:
+            bool: Tables crées avec succès
         """
         try:
-            if not doc:
-                self.db.create_table(
-                    name=collection_name, 
-                    schema=Chunks, 
-                    mode="overwrite"
-                )
-                return True
-            else:
-                self.db.create_table(
-                    name=settings.db_documents,
-                    schema=Document,
-                    mode="overwrite"
-                )
-                return True
+            self.db.create_table(
+                name=collection_name, 
+                schema=Chunks, 
+                mode="overwrite"
+            )
+            return True
+        except Exception as e:
+            raise Exception(e)
+        
+    def create_info_tables(self) -> bool:
+        """Création des tables de stockage des collections et documents
+
+        Raises:
+            Exception: Erreur lors de la création des tables
+
+        Returns:
+            bool: Tables crées avec succès
+        """
+        try:
+            self.db.create_table(
+                name=settings.db_collections, 
+                schema=CollectionInfo, 
+                mode="overwrite"
+            )
+            self.db.create_table(
+                name=settings.db_documents, 
+                schema=DocumentInfo, 
+                mode="overwrite"
+            )
+            return True
         except Exception as e:
             raise Exception(e)
         
@@ -88,36 +107,59 @@ class DbService:
         except Exception as e:
             raise Exception(e)
         
-    def insert_document(self, document: Document):
-        """Insertion des informations relatives à un document dans la base de données
-
-        Args:
-            document (Document): information sur le document
-
-        Raises:
-            Exception: Erreur lors de la sauvegarde du document dans la base de données
-        """
+    def insert_collection(self, collection: CollectionInfo):
         try:
-            table = self.db.open_table(settings.db_documents)
-            table.add([document])
+            table = self.db.open_table(settings.db_collections)
+            col = table.search().where(f"name = '{collection.name}'").limit(1).to_pydantic(model=CollectionInfo)
+            if len(col) >= 1:
+                raise Exception("La collection est déjà présente dans la base")    
+            table.add([collection])
         except Exception as e:
             raise Exception(e)
         
-    def get_nb_documents(self, collection_name: str) -> int:
-        """Nombre de documents enregistrés pour une collection / table
+    def insert_documents(self, collection_name: str, document: DocumentInfo):
+        try:
+            # Vérification que la collection existe
+            collection_table = self.db.open_table(settings.db_collections)
+            collection = collection_table.search().where(f"name = '{collection_name}'").limit(1).to_pydantic(model=CollectionInfo)
+            if len(collection) < 1:
+                raise Exception("Aucune collection trouvée")
+            elif len(collection) > 1:
+                raise Exception("Plusieurs collections trouvées")
+            # Test si le document est déjà présent
+            document_table = self.db.open_table(settings.db_documents)
+            doc = document_table.search().where(f"collection_name = '{collection_name}' and filename='{document.filename}'").limit(1).to_pydantic(model=DocumentInfo)
+            if len(doc) >= 1:
+                raise Exception("Le document est déjà indexé")    
+            # Insertion du nouveau document dans la liste des docuemnts liés à la collection
+            document_table.add([document])
+        except Exception as e:
+            raise Exception(e)
+        
+    def get_collection_info(self, collection_name: str) -> CollectionInfoResponse:
+        """Information sur la collection / table
 
         Args:
             collection_name (str): nom de la collection / table à inspecter
 
         Raises:
-            Exception: Erreur lors de la lecture du nombre de documents
+            Exception: Erreur lors de la lecture des informations de la collection
 
         Returns:
-            int: nombre de documents présents dans la collection / table
+            CollectionInfo: nombre de documents présents dans la collection / table
         """
         try:
-            table = self.db.open_table(settings.db_documents)
-            return table.count_rows(filter=f"collection = '{collection_name}'")
+            table_collection = self.db.open_table(settings.db_collections)
+            collection = table_collection.search().where(where=f"name='{collection_name}'").limit(1).to_pydantic(model=CollectionInfo)[0]
+            table_documents = self.db.open_table(settings.db_documents)
+            documents = table_documents.search().where(where=f"collection_name = '{collection_name}'").to_pydantic(model=DocumentInfo)
+            return CollectionInfoResponse(
+                name=collection.name,
+                description=collection.description,
+                user=collection.user,
+                created_date=collection.created_date,
+                documents=documents
+            )
         except Exception as e:
             raise Exception(e)
         
@@ -131,8 +173,10 @@ class DbService:
             Exception: Erreur lors de la suppression des documents
         """
         try:
-            table = self.db.open_table(name=settings.db_documents)
-            table.delete(f"collection = '{collection_name}'")
+            table_collection = self.db.open_table(name=settings.db_collections)
+            table_collection.delete(where=f"name = '{collection_name}'")
+            table_document = self.db.open_table(name=settings.db_documents)
+            table_document.delete(where=f"collection_name = '{collection_name}'")
         except Exception as e:
             raise Exception(e)
 

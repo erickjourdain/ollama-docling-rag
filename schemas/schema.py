@@ -45,21 +45,32 @@ class Chunks(LanceModel):
     vector: Vector(func.ndims()) = func.VectorField()  # type: ignore
     metadata: ChunkMetada
 
-class Document(LanceModel):
-    """Modèle document pour stockage des données"""
-    filename: str = Field(..., description="Le nom du fichier")
-    collection: str = Field(..., description="Nom de la collection liée au document")
-    date: datetime = Field(..., description="Date d'insertion dans la base")
+class DocumentInfo(LanceModel):
+    """Modèle document pour stockage des données en base"""
+    filename: str = Field(..., description="Nom du fichier")
+    collection_name: str = Field(..., description="Collection liée au document")
+    insertion_date: datetime = Field(..., description="Date d'insertion dans la base")
     user: str = Field(..., description="Nom de l'utilisateur ayant inséré le fichier")
+
+class CollectionInfo(LanceModel):
+    "Modèle collection pour stockage des données en base"
+    name: str = Field(..., description="Nom de la collection")
+    description: str = Field(..., description="Description du contenu de la collection")
+    user: str = Field(..., description="Créateur de la collection")
+    created_date: datetime = Field(..., description="Date de création de la collection")
+
+class CollectionInfoResponse(BaseModel):
+    "Modèle collection pour stockage des données en base"
+    name: str = Field(..., description="Nom de la collection")
+    description: str = Field(..., description="Description du contenu de la collection")
+    user: str = Field(..., description="Créateur de la collection")
+    created_date: datetime = Field(..., description="Date de création de la collection")
+    documents: list[DocumentInfo] = Field (..., description="Les documents insérés dans la collection")
 
 class CollectionCreate(BaseModel):
     """Requête pour la création d'une collection"""
     collection_name: str = Field(..., description="Nom de la collection à créer")
-
-class CollectionInfoResponse(BaseModel):
-    """Information sur la collection"""
-    name: str = Field(..., description="Nom de la collection")
-    nb_docs: int = Field(..., description="Nombre de documents dans la collection")
+    description: str = Field(..., description="Description du contenu de la collection")
 
 class QueryRequest(BaseModel):
     """Requête pour l'interrogation de la base de données"""

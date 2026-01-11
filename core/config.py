@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     # Lance Database
     db_dir: str = "./lancedb" # répertoire de stockage de la base de données
     db_documents: str = "documents" # nom de la collections pour le stockage des documents
+    db_collections: str = "collections" # nom de la collections pour le stockage des collections
 
     # Modèle LLM
     llm_model: str = "gemma3:4b" # nom du modèle llm utilisé par défaut

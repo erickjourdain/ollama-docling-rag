@@ -9,8 +9,9 @@ from .schema import (
     QueryRequest,
     Model,
     HealthResponse,
-    CollectionInfoResponse,
-    Document
+    DocumentInfo,
+    CollectionInfo,
+    CollectionInfoResponse
 )
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "QueryRequest",
     "Model",
     "HealthResponse",
-    "CollectionInfoResponse",
-    "Document"
+    "DocumentInfo",
+    "CollectionInfo",
+    "CollectionInfoResponse"
 ]
