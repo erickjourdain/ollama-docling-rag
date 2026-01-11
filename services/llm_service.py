@@ -4,8 +4,8 @@ from typing import List
 from dotenv import load_dotenv
 from ollama import Client, GenerateResponse
 
-from models import Chunks, Model
-from config import settings
+from schemas import Chunks, Model
+from core.config import settings
 
 load_dotenv()
 
@@ -101,7 +101,7 @@ class LlmService:
             model (Optional(str)): le modèle à utiliser par défaut celui présent dans le fichier config
 
         Raises:
-            HTTPException: 500 - Erreur lors de l'éxecution de la fonction
+            Exception: Erreur lors de l'éxecution de la fonction
 
         Returns:
             GenerateResponse: la réponse fournie par le LLM
@@ -162,7 +162,7 @@ class LlmService:
             model (Optional(str)): le modèle à utiliser par défaut celui présent dans le fichier config
 
         Raises:
-            HTTPException: 500 - Erreur lors de l'éxecution de la fonction
+            Exception: Erreur lors de l'éxecution de la fonction
 
         Returns:
             list[Chunks]: la liste des chuncks réordonnées
@@ -211,7 +211,7 @@ class LlmService:
         """Récupération des modèles disponibles
 
         Raises:
-            HTTPException: Erreur lors de la récupération des modèles Ollama
+            Exception: Erreur lors de la récupération des modèles Ollama
 
         Returns:
             ListResponse: Liste des modèles disponibles

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from services import LlmService, DbService
-from models import HealthResponse, Model
+from schemas import HealthResponse, Model
 
 router_system = APIRouter(prefix="/system")
 

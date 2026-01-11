@@ -12,7 +12,7 @@ from docling_core.transforms.chunker.hierarchical_chunker import (
 )
 from transformers import AutoTokenizer
 
-from models import ChunkMetada, ChunkWithoutVector, ChunkingResponse
+from schemas import ChunkMetada, ChunkWithoutVector, ChunkingResponse
 
 class MDTableSerializerProvider(ChunkingSerializerProvider):
     def get_serializer(self, doc):

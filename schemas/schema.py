@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, Field
 from lancedb.embeddings import get_registry
 from lancedb.pydantic import LanceModel, Vector
@@ -5,7 +6,7 @@ from typing import List, Optional
 from pathlib import Path
 from docling_core.types.doc.document import DoclingDocument
 
-from config import settings
+from core.config import settings
 
 class ProcessingResponse(BaseModel):
     """Réponse après le traitement d'un PDF"""
@@ -44,9 +45,21 @@ class Chunks(LanceModel):
     vector: Vector(func.ndims()) = func.VectorField()  # type: ignore
     metadata: ChunkMetada
 
+class Document(LanceModel):
+    """Modèle document pour stockage des données"""
+    filename: str = Field(..., description="Le nom du fichier")
+    collection: str = Field(..., description="Nom de la collection liée au document")
+    date: datetime = Field(..., description="Date d'insertion dans la base")
+    user: str = Field(..., description="Nom de l'utilisateur ayant inséré le fichier")
+
 class CollectionCreate(BaseModel):
     """Requête pour la création d'une collection"""
     collection_name: str = Field(..., description="Nom de la collection à créer")
+
+class CollectionInfoResponse(BaseModel):
+    """Information sur la collection"""
+    name: str = Field(..., description="Nom de la collection")
+    nb_docs: int = Field(..., description="Nombre de documents dans la collection")
 
 class QueryRequest(BaseModel):
     """Requête pour l'interrogation de la base de données"""

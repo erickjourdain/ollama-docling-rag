@@ -13,8 +13,8 @@ from docling.datamodel.pipeline_options import (
 )
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
-from config import settings
-from models import ConvertPdfResponse
+from core.config import settings
+from schemas import ConvertPdfResponse
 
 class ConversionService:
     """Service pour gérer l'envoi des fichiers pdf"""

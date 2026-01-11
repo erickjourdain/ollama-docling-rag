@@ -1,9 +1,10 @@
+from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from services import ConversionService, ChunkingService, DbService
-from models import ProcessingResponse
-from config import settings
+from schemas import ProcessingResponse, Document
+from core.config import settings
 
 router_insert = APIRouter(prefix="/insert", tags=["Insertion fichier"])
 
@@ -17,7 +18,7 @@ router_insert = APIRouter(prefix="/insert", tags=["Insertion fichier"])
 )
 async def process_pdf(
     file: UploadFile = File(..., description="Fichier PDF à traiter"),
-    collection_name: str = "Nom de la collection / table à utiliser pour le stockage"
+    collection_name: str = "Nom de la collection / table à utiliser pour le stockage",
 ) -> ProcessingResponse:
     """Traitement d'un fichier PDF et stockage dans la base de données"""
     # Vérification que le fichier fouri est bien un fichier pdf
@@ -39,18 +40,30 @@ async def process_pdf(
         (temp_dir / file.filename).unlink()
 
         # Vérifie l'existance de la collection / table
-        lancedb_service = DbService()
-        liste_collections = lancedb_service.list_tables()
+        db_service = DbService()
+        liste_collections = db_service.list_tables()
         if collection_name not in liste_collections:
-            lancedb_service.create_table(collection_name)
+            db_service.create_table(collection_name)
 
         # Chunk du document
         chunking_service = ChunkingService(filename=file.filename)
         chunking_result = chunking_service.basic_chunking(document=conversion_result.document)
 
         # Enregistrement des chunks dans la base de données
-        lancedb_service.insert_data(chunks=chunking_result.chunks, collection_name=collection_name)
+        db_service.insert_data(
+            chunks=chunking_result.chunks, 
+            collection_name=collection_name
+        )
 
+        # Enregistrement des informations liées au document inséré
+        document = Document(
+            filename=file.filename,
+            collection=collection_name,
+            date=datetime.now(),
+            user="erick jourdain"
+        )
+        db_service.insert_document(document=document)
+        
         return ProcessingResponse(
             success=True, 
             detail="PDF traité et stocké avec succès.",

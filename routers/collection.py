@@ -1,7 +1,8 @@
 from typing import Iterable
 from fastapi import APIRouter, HTTPException, status
 
-from models import CollectionCreate
+from schemas import CollectionCreate
+from schemas.schema import CollectionInfoResponse
 from services import DbService
 
 router_collection = APIRouter(prefix="/collections", tags=["Collections"])
@@ -46,6 +47,26 @@ async def new_collection(req: CollectionCreate) -> bool:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=f"Erreur lors de la création de la collection / table: {str(e)}"
         )
+    
+@router_collection.get(
+        "/infos",
+        summary="Information sur la collection",
+        description="Retourne les information sur la collection"
+)
+async def get_nb_docs(collection_name: str) -> CollectionInfoResponse:
+    try:
+        db_service = DbService()
+        nb_docs = db_service.get_nb_documents(collection_name=collection_name)
+        return CollectionInfoResponse(
+            name=collection_name,
+            nb_docs=nb_docs
+        )
+    except HTTPException as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Erreur lors de la lecture des information sur de la collection / table: {str(e)}"
+        )
+        
 
 @router_collection.delete(
         "",

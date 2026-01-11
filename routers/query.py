@@ -1,10 +1,10 @@
 from ollama import GenerateResponse
 from fastapi import APIRouter, HTTPException, status
 
-from models import QueryRequest
+from schemas import QueryRequest
 from services import DbService, LlmService
 
-from config import settings
+from core.config import settings
 
 router_query = APIRouter(prefix="/query", tags=["Query"])
 
@@ -36,6 +36,10 @@ async def query(req: QueryRequest) -> GenerateResponse:
         db_service = DbService()
         llm_service =  LlmService()
         model = req.model if req.model is not None else settings.llm_model
+        # Tester si la collecion / table existe
+        tables = db_service.list_tables()
+        if req.collection_name not in tables:
+            raise Exception(f"La collection '{req.collection_name}' n'existe pas")
         # Tester si le modèle existe
         models = llm_service.list_models()
         noms_models = [model.nom for model in models if not model.embed]

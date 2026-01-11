@@ -1,9 +1,9 @@
-fastapi
-uvicorn[standard]
-python-multipart
-ollama
 docling[ocrmac]
+fastapi
+lancedb
+ollama
 pydantic
 pydantic-settings
-lancedb
 python-dotenv
+python-multipart
+uvicorn[standard]
