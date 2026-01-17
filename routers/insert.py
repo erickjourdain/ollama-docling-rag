@@ -1,7 +1,9 @@
 from datetime import datetime
 from pathlib import Path
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 
+from core.util import md_to_html
+from schemas.response import PDFConversionResponse
 from services import ConversionService, ChunkingService, DbService
 from schemas import ProcessingResponse, DocumentInfo
 from core.config import settings
@@ -34,7 +36,7 @@ async def process_pdf(
 
         # Enregistrement du fichier dans le répertoire temporaire
         pdf_bytes = await file.read()
-        temp_dir = Path(settings.temp_directory)
+        temp_dir = Path(settings.temp_dir)
         temp_dir.mkdir(parents=True, exist_ok=True)
         with open(temp_dir / file.filename, "wb") as f:
             f.write(pdf_bytes)
@@ -79,4 +81,114 @@ async def process_pdf(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=f"Erreur lors du traitement du PDF: {str(e)}"
+        )
+    
+@router_insert.post(
+    "/convert_pdf",
+    response_model=PDFConversionResponse,
+    summary="Convertir un PDF en Markdown",
+    description="""
+    Conversion d'un fichier PDF en Markdown sans insertion dans la base de données.
+    """
+)
+async def convert_pdf(
+    file: UploadFile = File(..., description="Fichier PDF à convertir")
+) -> PDFConversionResponse:
+    """Conversion d'un fichier PDF en Markdown sans insertion dans la base de données"""
+    # Vérification que le fichier fourni est bien un fichier pdf
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Le fichier doit être un PDF.")
+    
+    try:
+        # Enregistrement du fichier dans le répertoire temporaire
+        pdf_bytes = await file.read()
+        temp_dir = Path(settings.temp_dir)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        with open(temp_dir / file.filename, "wb") as f:
+            f.write(pdf_bytes)
+
+        # Conversion du fichier pdf
+        conversion_service = ConversionService()
+        conversion_result = conversion_service.pdf_to_md(temp_dir / file.filename)
+        # Suppression du fichier temporaire
+        (temp_dir / file.filename).unlink()
+
+        return PDFConversionResponse(
+            markdown_uuid=conversion_result.markdown_uuid,
+            conversion_time=conversion_result.conversion_time
+        )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Erreur lors de la conversion du PDF: {str(e)}"
+        )
+    
+@router_insert.get(
+    "/view_md/{md_uuid}",
+    response_model=str,
+    summary="Afficher un fichier Markdown converti",
+    description="""
+    Affichage du contenu HTML d'un fichier Markdown converti.
+    """
+)
+async def view_md(
+    request: Request,
+    md_uuid: str
+) -> str:
+    """Affichage du contenu HTML d'un fichier Markdown converti"""
+    try:
+        temp_dir = Path(settings.static_temp_dir)
+        md_file_path = temp_dir / f"{md_uuid}.md"
+        if not md_file_path.exists():
+            raise HTTPException(status_code=404, detail="Fichier Markdown non trouvé.")
+
+        final_html = md_to_html(
+            file=md_file_path,
+            base_url=str(request.base_url).rstrip("/"),
+        )
+
+        return final_html
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Erreur lors de l'affichage du fichier Markdown: {str(e)}"
+        )
+    
+
+@router_insert.delete(
+    "/delete_md/{md_uuid}",
+    response_model=dict,
+    summary="Supprimer un fichier Markdown converti",
+    description="""
+    Suppression d'un fichier Markdown converti du répertoire temporaire.
+    """
+)
+async def delete_md(
+    md_uuid: str
+) -> dict:
+    """Suppression d'un fichier Markdown converti du répertoire temporaire"""
+    try:
+        temp_dir = Path(settings.static_temp_dir)
+        md_file_path = temp_dir / f"{md_uuid}.md"
+        if not md_file_path.exists():
+            raise HTTPException(status_code=404, detail="Fichier Markdown non trouvé.")
+
+        # Suppression du fichier Markdown
+        md_file_path.unlink()
+
+        md_img_path = temp_dir / "images" / md_uuid
+        if md_img_path.exists() and md_img_path.is_dir():
+            # Suppression du répertoire d'images associé
+            for img_file in md_img_path.iterdir():
+                img_file.unlink()
+            md_img_path.rmdir()
+
+        return {"detail": "Fichier Markdown supprimé avec succès."}
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Erreur lors de la suppression du fichier Markdown: {str(e)}"
         )

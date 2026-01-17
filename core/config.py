@@ -1,9 +1,14 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Struture de stockage des documents
-    temp_directory: str = "./temp" # répertoire temportaire de stockage des fichiers à insérer
-    md_dir: str = "./data/files" # répertoire de stockage des fichiers markdown
+    temp_dir: str = "./temp" # répertoire temportaire de stockage des fichiers à insérer
+
+    # Static files
+    static_url: str= "/data"
+    static_dir: Path = Path("data/files")
+    static_temp_dir: Path = static_dir / "temp"
     image_resolution_scale: float = 2.0
 
     # Lance Database

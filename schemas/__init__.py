@@ -13,6 +13,8 @@ from .schema import (
     CollectionInfo,
     CollectionInfoResponse
 )
+from .response import (PDFConversionResponse)
+from .conversion import (PDFConversionMd)
 
 __all__ = [
     "ProcessingResponse", 
@@ -27,5 +29,7 @@ __all__ = [
     "HealthResponse",
     "DocumentInfo",
     "CollectionInfo",
-    "CollectionInfoResponse"
+    "CollectionInfoResponse",
+    "PDFConversionMd",
+    "PDFConversionResponse"
 ]

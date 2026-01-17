@@ -1,5 +1,6 @@
 import logging
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from core.init import init_app
 from routers import router_collection, router_insert, router_query, router_system
 from core.config import settings
@@ -16,6 +17,9 @@ app = FastAPI(
 
 # Bootstrap de l'application
 init_app()
+
+# Static files configuration
+app.mount(settings.static_url, StaticFiles(directory=settings.static_dir), name="data")
 
 # Insertion des routes
 app.include_router(router_query)
