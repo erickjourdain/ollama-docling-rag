@@ -1,7 +1,5 @@
 from pathlib import Path
-from bs4 import BeautifulSoup
-
-from markdown_it import MarkdownIt
+import re
 
 from core.config import settings
 
@@ -9,38 +7,40 @@ def path_to_static_url(file_path: Path) -> str:
     relative_url = settings.static_url + "/" + file_path.as_posix()
     return relative_url
 
-def md_to_html(file: Path, base_url: str) -> str:
-    """Convertit le contenu Markdown en HTML simple.
 
-    Args:
-        file (str): Contenu du fichier Markdown.
+def rewrite_markdown_image_urls(
+    markdown: str,
+    markdown_path: Path,
+    base_url: str,
+) -> str:
+    """Réécrit les URLs des images dans le contenu Markdown pour pointer vers le dossier static."""
 
-    Returns:
-        str: Contenu converti en HTML.
-    """
+    IMAGE_MD_PATTERN = re.compile(
+        r'!\[([^\]]*)\]\(([^)]+)\)'
+    )
+    STATIC_DIR = settings.static_dir
     STATIC_URL = settings.static_url
 
-    doc_filename = file.stem
-    md = MarkdownIt("commonmark")
+    def replacer(match):
+        
+        alt_text: str = match.group(1)
+        img_path: str = match.group(2).strip()
 
-    with open(file, 'r', encoding='utf-8') as f:
-        content = f.read()
-    html = md.render(content)
+        # Ignore URLs absolues ou déjà traitées
+        if img_path.startswith(("http://", "https://", "data:", "/")):
+            return match.group(0)
 
-    soup = BeautifulSoup(html, 'html.parser')
+        # Résolution du path réel de l'image
+        image_fs_path = (markdown_path.parent / img_path).resolve()
 
-    for img in soup.find_all("img"):
-        src = img.get("src")
-        print(f"Original img src: {src}")  # Debug line
-        if not src:
-            continue
+        # Sécurité : l'image doit être dans le dossier static
+        if not image_fs_path.is_relative_to(STATIC_DIR.resolve()):
+            return match.group(0)
 
-        # Ignore les URLs absolues
-        src = str(src)
-        if src.startswith(("http://", "https://", "data:")):
-            continue
+        # Construction de l'URL statique
+        relative_path = image_fs_path.relative_to(STATIC_DIR.resolve())
+        image_url = f"{base_url}{STATIC_URL}/{relative_path.as_posix()}"
+        
+        return f"![{alt_text}]({image_url})"
 
-        img["src"] = f"{base_url}{STATIC_URL}/temp/images/{doc_filename}/{src}"
-        print(f"Updated img src: {img['src']}")  # Debug line
-
-    return str(soup)
+    return IMAGE_MD_PATTERN.sub(replacer, markdown)

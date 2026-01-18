@@ -2,7 +2,6 @@ chonkie
 docling[ocrmac]
 fastapi
 lancedb
-markdown-it-py
 ollama
 pydantic
 pydantic-settings

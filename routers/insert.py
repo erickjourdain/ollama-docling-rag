@@ -2,10 +2,10 @@ from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 
-from core.util import md_to_html
+from core.util import rewrite_markdown_image_urls
 from schemas.response import PDFConversionResponse
 from services import ConversionService, ChunkingService, DbService
-from schemas import ProcessingResponse, DocumentInfo
+from schemas import ProcessingResponse, DocumentInfo, ViewMDResponse, InfoMDResponse
 from core.config import settings
 
 router_insert = APIRouter(prefix="/insert", tags=["Insertion fichier"])
@@ -126,7 +126,7 @@ async def convert_pdf(
     
 @router_insert.get(
     "/view_md/{md_uuid}",
-    response_model=str,
+    response_model=ViewMDResponse,
     summary="Afficher un fichier Markdown converti",
     description="""
     Affichage du contenu HTML d'un fichier Markdown converti.
@@ -135,20 +135,23 @@ async def convert_pdf(
 async def view_md(
     request: Request,
     md_uuid: str
-) -> str:
+) -> ViewMDResponse:
     """Affichage du contenu HTML d'un fichier Markdown converti"""
     try:
         temp_dir = Path(settings.static_temp_dir)
         md_file_path = temp_dir / f"{md_uuid}.md"
         if not md_file_path.exists():
             raise HTTPException(status_code=404, detail="Fichier Markdown non trouvé.")
+        
+        content = md_file_path.read_text(encoding="utf-8")
 
-        final_html = md_to_html(
-            file=md_file_path,
-            base_url=str(request.base_url).rstrip("/"),
-        )
+        content = rewrite_markdown_image_urls(
+            markdown=content,
+            markdown_path=md_file_path,
+            base_url=str(request.base_url).rstrip("/")
+        )  
 
-        return final_html
+        return ViewMDResponse(markdown=str(content))
     
     except Exception as e:
         raise HTTPException(
@@ -156,6 +159,33 @@ async def view_md(
             detail=f"Erreur lors de l'affichage du fichier Markdown: {str(e)}"
         )
     
+@router_insert.get(
+    "/list_md",
+    response_model=list[InfoMDResponse],
+    summary="Lister les fichiers Markdown convertis",
+    description="""
+    Liste des fichiers Markdown convertis présents dans le répertoire temporaire.
+    """   
+)
+async def list_md() -> list[InfoMDResponse]:
+    """Liste des fichiers Markdown convertis présents dans le répertoire temporaire"""
+    try:
+        temp_dir = Path(settings.static_temp_dir)
+        md_files = [
+            InfoMDResponse(
+                markdown_uuid=f.stem,
+                creation_date=datetime.fromtimestamp(f.stat().st_ctime).isoformat(),
+                size=f.stat().st_size
+            )
+            for f in temp_dir.glob("*.md")
+        ]
+        return md_files
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Erreur lors de la liste des fichiers Markdown: {str(e)}"
+        )
 
 @router_insert.delete(
     "/delete_md/{md_uuid}",
