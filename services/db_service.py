@@ -1,11 +1,8 @@
 from typing import Iterable, List
 import lancedb
-from dotenv import load_dotenv
 
 from core.config import settings
 from schemas import ChunkWithoutVector, Chunks, CollectionInfo, DocumentInfo, CollectionInfoResponse
-
-load_dotenv()
 
 class DbService:
     """Service pour l'interrogation de la base de données vectorielles"""
