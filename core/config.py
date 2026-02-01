@@ -11,6 +11,12 @@ class Settings(BaseSettings):
     static_temp_dir: Path = static_dir / "temp"
     image_resolution_scale: float = 2.0
 
+    # Sqlite Database
+    sqlite_db_dir: str = "./data/metadata.db" # chemin de la base
+
+    # Chromadb Databse
+    chroma_db_dir: str = "./chromadb" # répertoire de stockage de la base de données
+
     # Lance Database
     db_dir: str = "./lancedb" # répertoire de stockage de la base de données
     db_documents: str = "documents" # nom de la collections pour le stockage des documents

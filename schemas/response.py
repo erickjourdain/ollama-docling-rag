@@ -14,3 +14,10 @@ class InfoMDResponse(BaseModel):
     markdown_uuid: str = Field(..., description="UUID du fichier Markdown converti")
     creation_date: str = Field(..., description="Date de création du fichier Markdown")
     size: int = Field(..., description="Taille du fichier Markdown en octets")
+
+class ProcessingResponse(BaseModel):
+    """Réponse après le traitement d'un PDF"""
+    detail: str = Field(..., description="Détail du résultat du traitement")
+    success: bool = Field(..., description="Indique si le traitement a réussi") 
+    conversion_time: float = Field(..., description="Durée de la conversion pdf to md")
+    embedding_time: float = Field(..., description="Durée de l'embedding")

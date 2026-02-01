@@ -12,7 +12,7 @@ from docling_core.transforms.chunker.hierarchical_chunker import (
 )
 from transformers import AutoTokenizer
 
-from schemas import ChunkMetada, ChunkWithoutVector, ChunkingResponse
+from schemas import ChunkMetada, Chunk, ChunkingResponse
 
 class MDTableSerializerProvider(ChunkingSerializerProvider):
     def get_serializer(self, doc):
@@ -27,8 +27,8 @@ class ChunkingService:
     def __init__(self, filename: str) -> None:
         self.filename = filename
     
-    def __docling_chunk_to_db_chunk(self, chunk: BaseChunk) -> ChunkWithoutVector:
-        """Transforme un chunk Docling en payload compatible LanceDB
+    def __docling_chunk_to_db_chunk(self, chunk: BaseChunk, document_id: str) -> Chunk:
+        """Transforme un chunk Docling en payload avec metadonnées
         (texte + metadonnées enrichies)
 
         Args:
@@ -62,12 +62,13 @@ class ChunkingService:
                     for p in prov.prov:
                         pages.add(p.page_no)
 
-            return ChunkWithoutVector(
+            return Chunk(
                 text=text,
                 metadata=ChunkMetada(
+                    document_id=document_id,
                     filename=self.filename,
-                    page_numbers=sorted(pages),
-                    context= full_section_path
+                    pages=str(sorted(pages)),
+                    section=full_section_path
                 )
             )
 
@@ -75,7 +76,7 @@ class ChunkingService:
             raise Exception(e)
         
 
-    def basic_chunking(self, document: DoclingDocument) -> ChunkingResponse:
+    def basic_chunking(self, document: DoclingDocument, document_id: str) -> ChunkingResponse:
         """Chunking du document Docling
 
         Args:
@@ -91,7 +92,7 @@ class ChunkingService:
         try:
             start_time = time.time()
             EMBED_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
-            MAX_TOKENS = 512  # set to a small number for illustrative purposes
+            MAX_TOKENS = 512 
 
             tokenizer = HuggingFaceTokenizer(
                 tokenizer=AutoTokenizer.from_pretrained(EMBED_MODEL_ID),
@@ -108,18 +109,11 @@ class ChunkingService:
             chunks = list(chunk_iter)
 
             # Création des chunks pour insertin dans la base LanceDB
-            chunks_for_db: List[ChunkWithoutVector] = []
+            chunks_for_db: List[Chunk] = []
 
             for chunk in chunks:
                 if len(chunk.text.strip()):
-                    payload = self.__docling_chunk_to_db_chunk(chunk=chunk)
-
-                    # 🔥 OPTION RECOMMANDÉE : enrichir le texte pour l'embedding
-                    if payload.metadata.context:
-                        payload.text = (
-                            f"[SECTION] {payload.metadata.context}\n\n"
-                            + payload.text
-                        )
+                    payload = self.__docling_chunk_to_db_chunk(chunk=chunk, document_id=document_id)
 
                     chunks_for_db.append(payload)
 
@@ -128,7 +122,7 @@ class ChunkingService:
 
             return ChunkingResponse(
                 chunks=chunks_for_db,
-                embedding_time=elapsed_time
+                elapsed_time=elapsed_time
             )
 
         except Exception as e:

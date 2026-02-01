@@ -1,4 +1,5 @@
-chonkie
+aiosqlite
+chromadb
 docling[ocrmac]
 fastapi
 lancedb
@@ -7,4 +8,5 @@ pydantic
 pydantic-settings
 python-dotenv
 python-multipart
+sqlalchemy[asyncio]
 uvicorn[standard]

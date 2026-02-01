@@ -62,3 +62,7 @@ dmypy.json
 data/
 lancedb/
 temp/
+chromadb/
+
+# test
+notebooks/

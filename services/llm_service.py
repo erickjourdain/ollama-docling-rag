@@ -1,11 +1,13 @@
 import os
 from typing import List
 
+from chromadb import Metadata
 from dotenv import load_dotenv
 from ollama import Client, GenerateResponse
 
-from schemas import Chunks, Model
+from schemas import Model
 from core.config import settings
+from schemas.health import OllamaHealth
 
 load_dotenv()
 
@@ -56,11 +58,12 @@ class LlmService:
         except Exception as e:
             raise Exception(e)
         
-    def __define_context(self, chunks: List[Chunks]) -> str:
+    def __define_context(self, docs: List[str], metadatas: List[Metadata]) -> str:
         """ Définition du contexte à partir des chunks fournis par la base vectorielle
 
         Args:
-            chunks (List[Chunks]): la liste des chunks à insérer dans le contexte
+            docs (List[str]): la liste des chunks à insérer dans le contexte
+            metadatas (List[Metadata]): liste des metadatas liés au chunks
 
         Returns:
             str: la chaine de caractère constituant le contexte à fournir au LLM
@@ -68,20 +71,18 @@ class LlmService:
         try:
             context_blocks = []
 
-            if len(chunks):
-                for idx, chunk in enumerate(chunks, start=1):
-                    filename = chunk.metadata.filename or "source inconnue"
-                    section = chunk.metadata.context or "section non precisée"
-                    pages = chunk.metadata.page_numbers or []
-
-                    pages_str = ", ".join(str(p) for p in pages) if pages else "non spécifiées"
+            if len(docs):
+                for idx, doc in enumerate(docs, start=1):
+                    filename = metadatas[idx].get('filename') or "source inconnue"
+                    section = metadatas[idx].get('section') or "section non precisée"
+                    pages = metadatas[idx].get('pages') or "non spécifiées"
 
                     block = f"""Source {idx}
                     Fichier : {filename}
                     Section : {section}
-                    Pages: {pages_str}
+                    Pages: {pages}
                     Contenu :
-                    {chunk.text.strip()}
+                    {doc.strip()}
                     """
                     context_blocks.append(block)
                     full_context = "\n\n".join(context_blocks)
@@ -92,7 +93,13 @@ class LlmService:
         except Exception as e:
             raise Exception(e)
         
-    def create_answer(self, chunks: List[Chunks], query: str, model: str = settings.llm_model) -> GenerateResponse:
+    def create_answer(
+            self, 
+            docs: List[str], 
+            metadatas: List[Metadata],
+            query: str, 
+            model: str = settings.llm_model
+        ) -> GenerateResponse:
         """Construction de la réponse à la demande à partir des données fournies par la base vectorielle
 
         Args:
@@ -108,7 +115,7 @@ class LlmService:
         """
 
         try:
-            context = self.__define_context(chunks=chunks)
+            context = self.__define_context(docs=docs, metadatas=metadatas)
             return self.llm_client.generate(
                 model=model,
                 prompt=f"""
@@ -152,26 +159,24 @@ class LlmService:
         except Exception as e:
             raise Exception(e)
         
-    def rerank_chunks_llm(self, query: str, chunks: list[Chunks], limit: int = 5) -> list[Chunks]:
+    def rerank_chunks_llm(self, query: str, chunks: list[str]) -> list[int]:
         """ Reranking des réponses (chunks) en fonction de leur pertinence
 
         Args:
             query (str): la requête initiale de l'utilisateur
-            chunks (list[Chunks]): liste de chuncks à réordonner
-            limit (Optional(int)): le nombre max de chuncks à retourner (5 par défaut)
-            model (Optional(str)): le modèle à utiliser par défaut celui présent dans le fichier config
+            chunks (list[str]): liste de chuncks à réordonner
 
         Raises:
             Exception: Erreur lors de l'éxecution de la fonction
 
         Returns:
-            list[Chunks]: la liste des chuncks réordonnées
+            list[int]: la liste des chuncks réordonnées
         """
         
         try: 
             chunks_text = "\n\n".join(
-                f"[{i}] {chunk.text}"
-                for i, chunk in enumerate(chunks)
+                f"[{i}] {doc}"
+                for i, doc in enumerate(chunks)
             )
 
             prompt = f"""
@@ -188,7 +193,7 @@ class LlmService:
             {chunks_text}
 
             Classement :
-            """
+            """.strip()
 
             response = self.llm_client.generate(
                 model=settings.llm_model,
@@ -196,13 +201,11 @@ class LlmService:
                 options={"temperature": 0}
             )
 
-            ranked_indices = [
+            return [
                 int(i.strip())
                 for i in response["response"].split(",")
                 if i.strip().isdigit()
             ]
-
-            return [chunks[i] for i in ranked_indices[:limit]]
         
         except Exception as e:
             raise Exception(e)
@@ -233,3 +236,16 @@ class LlmService:
         
         except Exception as e:
             raise Exception(e)
+        
+    def check_ollama(self) -> OllamaHealth:
+        try:
+            models = self.list_models()
+            return OllamaHealth(
+                ok= True,
+                models=models
+            )
+        except Exception as e:
+            return OllamaHealth(
+                ok=False,
+                error=str(e)
+            )

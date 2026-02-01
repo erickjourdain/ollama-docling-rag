@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from services import LlmService, DbService
+from depencies.sqlite_session import get_db
+from depencies.vector_db import get_vector_db_service
+from services import DbVectorielleService, LlmService, HealthService
 from schemas import HealthResponse, Model
 
 router_system = APIRouter(prefix="/system")
@@ -18,33 +21,11 @@ router_system = APIRouter(prefix="/system")
     """,
     tags=["Système"]
 )
-async def health_check() -> HealthResponse:
-    try:
-        llm_service = LlmService()
-        models_list = llm_service.list_models()
-        llm_status = "ok"
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
-            detail="serveur ollama injoignable"
-        )
-    
-    try:
-        db_service = DbService()
-        db_service.list_tables()
-        db_service = "ok"
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
-            detail="erreur connexion ChromaDB"
-        )
-    
-    return HealthResponse(
-        api="ok",
-        llm=llm_status,
-        db=db_service,
-        models_available=models_list
-    )
+async def health_check(
+    db: AsyncSession = Depends(get_db),
+    vector_db: DbVectorielleService = Depends(get_vector_db_service)
+    ) -> HealthResponse:
+    return await HealthService.check(db=db, vector_db=vector_db)
 
 @router_system.get(
     "/models",
