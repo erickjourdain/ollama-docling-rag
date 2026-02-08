@@ -1,21 +1,22 @@
-from datetime import datetime
-from chromadb import Metadata
-from ollama import GenerateResponse
+from concurrent.futures import ThreadPoolExecutor
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from depencies.sqlite_session import get_db
-from depencies.vector_db import get_vector_db_service
-from schemas import QueryRequest
-from services import CollectionService, DbVectorielleService, LlmService
-
 from core.config import settings
+from depencies.sqlite_session import get_db
+from depencies.worker import get_workers
+from repositories import job_repository
+from schemas import QueryRequest, CollectionModel
+from schemas.response import InsertResponse
+from services import CollectionService, LlmService
+from worker.query_collection import query_collection
 
 router_query = APIRouter(prefix="/query", tags=["Query"])
 
 @router_query.post(
         "",
-        response_model=GenerateResponse,
+        response_model=InsertResponse,
         summary="Interroge la base de connaissances",
         description="""
         Excute une requête sur la base de connaissances:
@@ -26,12 +27,12 @@ router_query = APIRouter(prefix="/query", tags=["Query"])
 def query(
     payload: QueryRequest, 
     session: Session = Depends(get_db),
-    vector_db: DbVectorielleService = Depends(get_vector_db_service)
-    ) -> GenerateResponse:
+    executor: ThreadPoolExecutor = Depends(get_workers)
+    ) -> InsertResponse:
     """Exécution d'une requête utilisateur sur le système RAG
 
     Args:
-        req (QueryRequest): Information sur la requête à effectuer
+        payload (QueryRequest): Information sur la requête à effectuer
             query: requête de l'utilisateur
             collection_name: nom de la collection à interroger
             model: nom du modèle à utiliser (optionel)
@@ -40,76 +41,47 @@ def query(
         HTTPException: Erreur lors de l'éxecution de la fonction
 
     Returns:
-        GenerateResponse | None: Réponse 
+        InsertResponse | None: identifiant du job 
     """
     try:
-        collection_service = CollectionService()
-        llm_service =  LlmService()
-        model = payload.model if payload.model is not None else settings.LLM_MODEL
-        # Tester si la collecion / table existe
-        collection = collection_service.get_by_name(session=session, name=payload.collection_name)
+        # 1. Vérification de la présence de la collection
+        collection = CollectionService.get_by_name(
+            session=session, 
+            name=payload.collection_name
+        )
         if collection is None:
-            raise Exception(f"La collection '{payload.collection_name}' n'existe pas")
-        # Tester si le modèle existe
+            raise Exception(f"La collection {payload.collection_name} n'existe pas")
+        collection = CollectionModel.model_validate(collection)
+
+        # 2. Vérification de l'existence du modèle
+        model = payload.model if payload.model is not None else settings.LLM_MODEL
+        llm_service =  LlmService()
         models = llm_service.list_models()
         noms_models = [model.nom for model in models if not model.embed]
         if model not in noms_models:
             raise Exception(f"Le modèle '{payload.model}' n'est pas disponible")
-        vectordb_query = llm_service.vectordb_query(payload.query, model=model)
-        result = vector_db.query_collection(query=vectordb_query, collection_name=payload.collection_name)
-        
-        documents = result.get("documents")
-        metadatas = result.get("metadatas")
 
-        # Vérification que la requête à retourner des éléments
-        if (
-            not documents
-            or not documents[0]
-            or not metadatas
-            or not metadatas[0]
-        ):
-            return GenerateResponse(
-                model=payload.model,
-                created_at=datetime.now().isoformat(),
-                done=False,
-                done_reason="Aucun document trouvé",
-                total_duration=0,
-                load_duration=0,
-                prompt_eval_count=0,
-                prompt_eval_duration=0,
-                eval_count=0,
-                eval_duration=0,
-                response="""
-                    '''json
-                        {
-                            "answer": "Aucune donnée trouvée permettant de répondre à la question posée",
-                            "sources": []
-                        }
-                    '''
-                """
-            )
-
-        # Reranking des documents
-        documents = documents[0]
-        metadatas = metadatas[0]
-        ranking = llm_service.rerank_chunks_llm(query=payload.query,chunks=documents)
-
-        reranked_docs: list[str] = []
-        reranked_metas: list[Metadata] = []
-        for idx in ranking:
-            if idx < len(documents):
-                reranked_docs.append(documents[idx])
-                reranked_metas.append(metadatas[idx])
-
-        # Création de la réponse
-        reponse = llm_service.create_answer(
-            docs=reranked_docs, 
-            metadatas=reranked_metas, 
-            query=payload.query, 
-            model=model
+        # 3. Création du job dans la base de données
+        job_id = str(uuid.uuid4())
+        job = job_repository.create_job(
+            session=session, 
+            job_id=job_id, 
+            input_data=payload.query
         )
 
-        return reponse
+        if job is None:
+            raise Exception("Erreur de la création du job")
+
+        # 3. Mise en attente de la requête dans la pile de traitement
+        executor.submit(query_collection,
+            job_id=job_id,
+            query=payload.query,
+            model=model,
+            collection_name=payload.collection_name
+        )
+
+        return InsertResponse(job_id=job_id)
+    
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 

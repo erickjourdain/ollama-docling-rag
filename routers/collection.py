@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from core.config import settings
-#from depencies.sqlite_session import get_db_async
 from depencies.sqlite_session import get_db
 from depencies.vector_db import get_vector_db_service
 from services import CollectionService, DbVectorielleService
@@ -20,7 +19,6 @@ router_collection = APIRouter(prefix="/collections", tags=["Collections"])
 def get_collections(
     limit: int = 50, 
     offset: int = 0, 
-    #db: AsyncSession = Depends(get_db_async)
     session: Session = Depends(get_db)
  ) -> list[CollectionModel]:
     try:

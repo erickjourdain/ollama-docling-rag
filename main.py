@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.init import init_app
 from depencies.sqlite_session import SessionLocalSync
-from routers import router_collection, router_insert, router_query, router_system
+from routers import router_collection, router_insert, router_query, router_system, router_job
 from core.config import settings
 from services import UserService, DbVectorielleService
 
@@ -57,6 +57,7 @@ app.mount(settings.static_url, StaticFiles(directory=settings.static_dir), name=
 app.include_router(router_query)
 app.include_router(router_collection)
 app.include_router(router_insert)
+app.include_router(router_job)
 app.include_router(router_system)
 
 if __name__ == "__main__":

@@ -1,4 +1,3 @@
-from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm  import Session
 
@@ -18,21 +17,12 @@ def update_job_progress(
         job.error = error
         session.commit()
 
-def finish_job(
-    session: Session,
-    job_id: str
-):
-    job = session.get(Job, job_id)
-    if job:
-        job.finished_at = datetime.now()
-        session.commit()
-
 def create_job(
     session: Session,
     job_id: str,
-    filename: str | None
+    input_data: str | None
 ):
-    new_job=Job(id=job_id, input_data=filename)
+    new_job=Job(id=job_id, input_data=input_data)
     session.add(new_job)
     session.commit()
     session.refresh(new_job)

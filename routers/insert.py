@@ -9,8 +9,7 @@ from depencies.sqlite_session import get_db
 from depencies.worker import get_workers
 from repositories import job_repository
 from schemas.collection import CollectionModel
-from services import job_service
-from schemas import InsertResponse, JobOut
+from schemas import InsertResponse
 from services import ConversionService, CollectionService
 from services.user_service import UserService
 from worker.insert_pdf import insert_pdf
@@ -75,7 +74,7 @@ async def process_pdf(
         job_repository.create_job(
             session=session, 
             job_id=job_id, 
-            filename=filename
+            input_data=filename
         )
 
         # 5. Récupération de l'utilisateur
@@ -86,6 +85,7 @@ async def process_pdf(
         if user is None:
             raise Exception("L'utilisateur n'existe pas")
         
+        # 6. Mise en attente du document dans la pile de traitement
         executor.submit(insert_pdf,
             file_path=file_path,
             filename=filename, 
@@ -100,42 +100,5 @@ async def process_pdf(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=f"Erreur lors du traitement du PDF: {str(e)}"
-        )
-    
-@router_insert.get(
-        "/{job_id}",
-        response_model=JobOut,
-        summary="Statut d'un job d'insertion",
-        description="Fourniture de l'état d'avancement de l'insertion d'un fichier dans la base de connaissances",
-)
-def job_status(
-    job_id: str,
-    session: Session = Depends(get_db),
-) -> JobOut:
-    """Status d'avancement de l'insertion d'un fichier dans la base de connaissances
-
-    Args:
-        job_id (str): id du job d'insertion
-        session (Session, optional): Session de connection à la base de données. Defaults to Depends(get_db).
-
-    Raises:
-        HTTPException: 404 job not found
-        HTTPException: 500 internal server error
-
-    Returns:
-        Job: Etat du job d'insertion
-    """
-    try:
-        job = job_service.get_job(sesssion=session, job_id=job_id)
-        if job is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, 
-                detail="Aucun job portant cet identifiant"
-            )
-        return JobOut.model_validate(job)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Erreur lors de la lectrure d'un job: {str(e)}"
         )
     
