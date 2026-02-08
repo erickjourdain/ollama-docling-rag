@@ -1,6 +1,5 @@
 from .schema import (
     #ProcessingResponse, 
-    ConvertPdfResponse,
     #ChunkMetada,
     #ChunkWithoutVector,
     #ChunkingResponse,
@@ -10,17 +9,17 @@ from .schema import (
     #HealthResponse,
     #CollectionInfoResponse,
 )
-from .response import (PDFConversionResponse, ViewMDResponse, InfoMDResponse, ProcessingResponse)
-from .conversion import (PDFConversionMd)
-from .collection import (CollectionOut, CollectionCreate)
-from .document import (DocumentOut, DocumentCreate)
+from .collection import (CollectionModel, CollectionCreate)
+from .document import (DocumentModel, DocumentCreate)
 from .user import (UserOut, UserCreate)
+from .job import JobOut
 from .chunk import (ChunkMetada, Chunk, ChunkingResponse)
 from .health import (OllamaHealth, HealthResponse)
+from .response import InsertResponse
+from .conversion import ConvertPdfResponse
 
 __all__ = [
-    "ProcessingResponse", 
-    "ConvertPdfResponse", 
+    "InsertResponse",
     #"ChunkMetada", 
     #"ChunkWithoutVector", 
     #"ChunkingResponse", 
@@ -32,19 +31,17 @@ __all__ = [
     #"DocumentInfo",
     #"CollectionInfo",
     #"CollectionInfoResponse",
-    "PDFConversionMd",
-    "PDFConversionResponse",
-    "ViewMDResponse",
-    "InfoMDResponse",
     "UserOut",
     "UserCreate",
-    "CollectionOut",
+    "CollectionModel",
     "CollectionCreate",
-    "DocumentOut",
+    "DocumentModel",
     "DocumentCreate",
+    "JobOut",
     "ChunkMetada",
     "Chunk",
     "ChunkingResponse",
     "OllamaHealth",
-    "HealthResponse"
+    "HealthResponse",
+    "ConvertPdfResponse"
 ]

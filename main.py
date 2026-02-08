@@ -1,29 +1,34 @@
+from concurrent.futures import ThreadPoolExecutor
 import os
-import logging
+
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+
 from core.init import init_app
+from depencies.sqlite_session import SessionLocalSync
 from routers import router_collection, router_insert, router_query, router_system
 from core.config import settings
-from services.db_vectorielle_service import DbVectorielleService
+from services import UserService, DbVectorielleService
 
 load_dotenv()
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Lifespan de l'application
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_app()
+    init_app()
     app.state.vector_db_service = DbVectorielleService(
         chroma_db_dir=settings.chroma_db_dir,
-        embedding_model=settings.llm_embedding_model,
-        ollama_url=os.environ.get("OLLAMA_API_URL", "http://localhost:11434") 
+        embedding_model=settings.LLM_EMBEDDINGS_MODEL,
+        ollama_url=settings.OLLAMA_URL
     )
+    # Définition du nombre de workers disponibles pour l'application
+    app.state.executor = ThreadPoolExecutor(max_workers=settings.max_worker)
+    # Création de l'administrateur au premier démarrage de l'application
+    with SessionLocalSync() as session:
+        UserService().create_first_admin(session=session)
     yield
     # Code de nettoyage si nécessaire
 
@@ -37,7 +42,6 @@ app = FastAPI(
 
 # Configuration CORS
 origins= [os.environ.get("FRONTEND_URL", "")]
-print("Allowed CORS origins:", origins)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -48,7 +52,6 @@ app.add_middleware(
 
 # Static files configuration
 app.mount(settings.static_url, StaticFiles(directory=settings.static_dir), name="data")
-
 
 # Insertion des routes
 app.include_router(router_query)

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from depencies.sqlite_session import get_db
 from depencies.vector_db import get_vector_db_service
@@ -21,11 +21,11 @@ router_system = APIRouter(prefix="/system")
     """,
     tags=["Système"]
 )
-async def health_check(
-    db: AsyncSession = Depends(get_db),
+def health_check(
+    session: Session = Depends(get_db),
     vector_db: DbVectorielleService = Depends(get_vector_db_service)
     ) -> HealthResponse:
-    return await HealthService.check(db=db, vector_db=vector_db)
+    return HealthService.check(session=session, vector_db=vector_db)
 
 @router_system.get(
     "/models",
@@ -34,7 +34,7 @@ async def health_check(
     description="Récupère la liste des modèles disponibles pour interrogation",
     tags=["Système"]
 )
-async def list_models() -> list[Model]:
+def list_models() -> list[Model]:
     try:
         llm_service = LlmService()
         return llm_service.list_models()

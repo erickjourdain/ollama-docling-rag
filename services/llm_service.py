@@ -17,7 +17,7 @@ class LlmService:
     def __init__(self):
         self.llm_client = Client(os.environ.get("OLLAMA_BASE_URL"))
 
-    def vectordb_query(self, query: str, model: str = settings.llm_model) -> str:
+    def vectordb_query(self, query: str, model: str = settings.LLM_MODEL) -> str:
         """Restructuration de la requête pour interrogation de la base de données vectorielle
 
         Args:
@@ -98,7 +98,7 @@ class LlmService:
             docs: List[str], 
             metadatas: List[Metadata],
             query: str, 
-            model: str = settings.llm_model
+            model: str = settings.LLM_MODEL
         ) -> GenerateResponse:
         """Construction de la réponse à la demande à partir des données fournies par la base vectorielle
 
@@ -196,7 +196,7 @@ class LlmService:
             """.strip()
 
             response = self.llm_client.generate(
-                model=settings.llm_model,
+                model=settings.LLM_MODEL,
                 prompt=prompt,
                 options={"temperature": 0}
             )

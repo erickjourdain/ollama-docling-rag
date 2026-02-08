@@ -2,7 +2,7 @@ from datetime import datetime
 from chromadb import Metadata
 from ollama import GenerateResponse
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from depencies.sqlite_session import get_db
 from depencies.vector_db import get_vector_db_service
@@ -23,9 +23,9 @@ router_query = APIRouter(prefix="/query", tags=["Query"])
         - envoi du contexte au LLM pour création de la réponse
         """
 )
-async def query(
+def query(
     payload: QueryRequest, 
-    db: AsyncSession = Depends(get_db),
+    session: Session = Depends(get_db),
     vector_db: DbVectorielleService = Depends(get_vector_db_service)
     ) -> GenerateResponse:
     """Exécution d'une requête utilisateur sur le système RAG
@@ -45,9 +45,9 @@ async def query(
     try:
         collection_service = CollectionService()
         llm_service =  LlmService()
-        model = payload.model if payload.model is not None else settings.llm_model
+        model = payload.model if payload.model is not None else settings.LLM_MODEL
         # Tester si la collecion / table existe
-        collection = collection_service.get_by_name(db=db, name=payload.collection_name)
+        collection = collection_service.get_by_name(session=session, name=payload.collection_name)
         if collection is None:
             raise Exception(f"La collection '{payload.collection_name}' n'existe pas")
         # Tester si le modèle existe

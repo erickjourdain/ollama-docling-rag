@@ -1,4 +1,5 @@
 aiosqlite
+bcrypt
 chromadb
 docling[ocrmac]
 fastapi

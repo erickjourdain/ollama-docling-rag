@@ -1,8 +1,8 @@
-import os
 import time
 import shutil
-import uuid
+from fastapi import UploadFile
 from pathlib import Path
+from sqlalchemy.orm import Session
 
 from docling_core.types.doc.base import ImageRefMode
 
@@ -16,16 +16,94 @@ from docling.datamodel.pipeline_options import (
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
 from core.config import settings
+from core.security import hash_file
 from schemas import ConvertPdfResponse
-from schemas.conversion import PDFConversionMd
+from repositories.collections_repository import CollectionRepository
 
 class ConversionService:
     """Service pour gérer l'envoi des fichiers pdf"""
 
-    def __init__(self):
-        pass
+    @staticmethod
+    def check_pdf(
+        file: UploadFile,
+    ) -> bool:
+        """Vérification si le fichier est un fichier pdf
 
-    def convert_pdf_to_md(self, file_path: Path | str, collection_name: str) -> ConvertPdfResponse:
+        Args:
+            file (UploadFile): fichier à insérer
+
+        Returns:
+            bool: Etat de la vérification
+        """
+        # Vérification que le fichier fourni est bien un fichier pdf
+        if not file.filename or not file.filename.lower().endswith(".pdf"):
+            return False
+        return True
+    
+    @staticmethod
+    async def save_pdf(
+        file: UploadFile,
+        collection_name: str,
+        filename: str
+    ) -> Path:
+        """Sauvegarde du fichier pdf
+
+        Args:
+            file (UploadFile): fichier à sauvegarder
+            collection_name (str): nom de la base de connaissance d'insertion du fichier
+
+        Raises:
+            ValueError: Erreur lors de l'enregistrement du fichier
+
+        Returns:
+            Path: chemin du fichier sauvegardé
+        """
+        try:
+            # Gestion du répertoires de stockage
+            md_dir = Path(settings.static_dir) / collection_name
+            md_dir.mkdir(exist_ok=True)
+
+            # Enregistrement du fichier
+            path = md_dir / filename
+            pdf_bytes = await file.read()
+            with open(path, "wb") as f:
+                f.write(pdf_bytes)
+            return path
+        except Exception as e:
+            raise ValueError(e)
+        
+    @staticmethod
+    def check_md5(
+        file_path: Path,
+        collection_id: str,
+        session: Session
+    ) -> bool:
+        """Vérification de la présence du fichier dans la collection
+
+        Args:
+            filepath (Path): chemin du fichier à vérifier
+            collection_id (str): l'identifant de la collection
+            session (Session): session d'accès à la base de données
+
+        Raises:
+            ValueError: erreur lors de la vérification de la présence du fichier
+
+        Returns:
+            bool: présence du fichier
+        """
+        try:
+            md5 = hash_file(file_path=file_path)
+            document = CollectionRepository.get_document_collection_by_md5(
+                session=session,
+                collection_id=collection_id,
+                md5=md5
+            )
+            return document is not None
+        except Exception as e:
+            raise ValueError(e)
+
+    @staticmethod
+    def convert_pdf_to_md(file_path: Path | str, collection_name: str) -> ConvertPdfResponse:
         """_summary_
 
         Args:
@@ -98,69 +176,5 @@ class ConversionService:
         
         except Exception as e:
             raise Exception(e)
-        
-    def pdf_to_md(self, file_path: Path | str) -> PDFConversionMd:
-        """Convertir un fichier PDF en Markdown et sauvegarder le résultat.
 
-        Args:
-            file_path (Path | str): Chemin vers le fichier PDF à convertir.
-            output_md_path (Path | str): Chemin où sauvegarder le fichier Markdown converti.
-
-        Raises:
-            Exception: Erreur lors de la conversion du PDF.
-        """
-        try:
-            # Configuration des options de conversion PDF
-            pipeline_options = PdfPipelineOptions()
-            pipeline_options.do_ocr = False
-            pipeline_options.images_scale = settings.image_resolution_scale
-            pipeline_options.generate_picture_images = True
-            pipeline_options.do_table_structure = True
-            pipeline_options.table_structure_options = TableStructureOptions(
-                mode = TableFormerMode.ACCURATE
-            )
-            pipeline_options.accelerator_options = AcceleratorOptions(
-                num_threads=4, device=AcceleratorDevice.AUTO
-            )
-
-            # Conversion du document
-            start_time = time.time()
-            doc_converter = DocumentConverter(
-                format_options={
-                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-                }
-            )
-            convert_doc = doc_converter.convert(file_path)
-
-            # Gestion des répertoires de stockage
-            doc_uuid = uuid.uuid4()
-            md_filename = f"{doc_uuid}.md"
-            full_md_path = os.path.join(Path(settings.static_temp_dir), md_filename)
-            relative_img_dir = Path("images") / str(doc_uuid)
-            full_img_dir = os.path.join(Path(settings.static_temp_dir), relative_img_dir)
-
-            # Suppression des fichiers existants
-            if Path(full_md_path).exists():
-                Path(full_md_path).unlink()
-
-            if Path(full_img_dir).exists():
-                shutil.rmtree(full_img_dir)
-
-            # Sauvegarde du fichier Markdown
-            convert_doc.document.save_as_markdown(
-                filename=full_md_path,
-                artifacts_dir=relative_img_dir, 
-                image_mode=ImageRefMode.REFERENCED
-            )
-
-            # Calcul du temps écoulé
-            elapsed_time = time.time() - start_time
-
-            return PDFConversionMd(
-                markdown_uuid=str(doc_uuid),
-                conversion_time=elapsed_time
-            )
-        
-        except Exception as e:
-            raise Exception(e)
         

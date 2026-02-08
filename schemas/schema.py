@@ -37,7 +37,7 @@ class ChunkingResponse(LanceModel):
     chunks: List[ChunkWithoutVector]
     embedding_time: float = Field(..., description="Durée de l'embedding")
     
-func = get_registry().get("ollama").create(name=settings.llm_embedding_model)
+func = get_registry().get("ollama").create(name=settings.LLM_EMBEDDINGS_MODEL)
 
 class Chunks(LanceModel):
     """Chunk pour stockage en base de données"""
@@ -76,7 +76,7 @@ class QueryRequest(BaseModel):
     """Requête pour l'interrogation de la base de données"""
     query: str = Field(..., description="La requête à éxecuter")
     collection_name: str = Field(..., description="La collection à interroger")
-    model: Optional[str] = Field(None, description=f"Le modèle à utiliser pour la requête par défaut '{settings.llm_model}'")
+    model: Optional[str] = Field(None, description=f"Le modèle à utiliser pour la requête par défaut '{settings.LLM_MODEL}'")
 
 class Model(BaseModel):
     """Modèle de gestion des modèles LLM disponibles"""

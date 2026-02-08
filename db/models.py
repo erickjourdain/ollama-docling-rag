@@ -1,36 +1,56 @@
-from sqlalchemy import Column, String, Text, ForeignKey, DateTime
-from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy.sql import func
+from datetime import datetime
+from typing import Optional
+from sqlalchemy import String, Text, ForeignKey, DateTime, Boolean
+from sqlalchemy.orm import Mapped, DeclarativeBase, mapped_column, relationship
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 class User(Base):
     """Modèle utilisateur pour gestion des utilisateurs"""
     __tablename__ = "users"
 
-    id = Column(String, primary_key=True)
-    username = Column(String, unique=True, nullable=False)
-    email = Column(String)
-    created_at = Column(DateTime, server_default=func.now())
-
+    id: Mapped[str] = mapped_column(Text, primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String)
+    role: Mapped[str] = mapped_column(String(25), default="USER")
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now())
+    is_active: Mapped[bool] = mapped_column(default=True)
+ 
 class CollectionMetadata(Base):
     """Modèle collection pour gestion des métadonnées des collections"""
     __tablename__ = "collections_metadata"
 
-    id = Column(String, primary_key=True)
-    name = Column(String, unique=True, nullable=False)
-    description = Column(Text)
-    created_by = Column(String, ForeignKey("users.id"), nullable=False)
-    creator = relationship("User", lazy="joined")
-    date_creation = Column(DateTime, server_default=func.now())
+    id: Mapped[str] = mapped_column(Text, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    description: Mapped[str] = mapped_column(Text,)
+    created_by: Mapped[str] = mapped_column(Text, ForeignKey("users.id"), nullable=False)
+    creator: Mapped[User] = relationship("User", lazy="joined")
+    date_creation: Mapped[datetime] = mapped_column(DateTime, default=datetime.now())
 
 class DocumentMetadata(Base):
     """Modèle document pour gestion des métadonnées des documents"""
     __tablename__ = "documents_metadata"
 
-    id = Column(String, primary_key=True)
-    filename = Column(String, nullable=False)
-    collection_id = Column(String, ForeignKey("collections_metadata.id"), nullable=False)
-    inserted_by = Column(String, ForeignKey("users.id"), nullable=False)
-    creator = relationship("User", lazy="joined")
-    date_insertion = Column(DateTime, server_default=func.now())
+    id: Mapped[str] = mapped_column(Text, primary_key=True, index=True)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    collection_id: Mapped[str] = mapped_column(Text, ForeignKey("collections_metadata.id"), nullable=False)
+    inserted_by: Mapped[str] = mapped_column(Text, ForeignKey("users.id"), nullable=False)
+    creator: Mapped[User] = relationship("User", lazy="joined")
+    md5: Mapped[str] = mapped_column(Text)
+    date_insertion: Mapped[datetime] = mapped_column(DateTime, default=datetime.now())
+    is_indexed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+class Job(Base):
+    """Modèle pour le stockage des jobs d'indexation des documents"""
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, index=True)
+    status: Mapped[str]  = mapped_column(default="queued")  # queued, processing, completed, failed
+    progress: Mapped[str]  = mapped_column(default="conversion")    # conversion, chunking, embeddings, done
+    input_data: Mapped[str]  = mapped_column(Text)
+    result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now())
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)

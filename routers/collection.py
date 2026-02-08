@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
+from core.config import settings
+#from depencies.sqlite_session import get_db_async
 from depencies.sqlite_session import get_db
 from depencies.vector_db import get_vector_db_service
-from schemas.document import DocumentOut
 from services import CollectionService, DbVectorielleService
-from schemas import CollectionOut, CollectionCreate
+from schemas import DocumentModel, CollectionCreate, CollectionModel
+from services.user_service import UserService
 
 router_collection = APIRouter(prefix="/collections", tags=["Collections"])
 
@@ -13,22 +15,23 @@ router_collection = APIRouter(prefix="/collections", tags=["Collections"])
         "",
         summary="Liste des collections / tables",
         description="Récupère l'ensemble des collections / tables de la base de données",
-        response_model=list[CollectionOut]
+        response_model=list[CollectionModel]
 )
-async def get_collections(
+def get_collections(
     limit: int = 50, 
     offset: int = 0, 
-    db: AsyncSession = Depends(get_db)
- ) -> list[CollectionOut]:
+    #db: AsyncSession = Depends(get_db_async)
+    session: Session = Depends(get_db)
+ ) -> list[CollectionModel]:
     try:
         limit = (limit if limit < 50 and limit > 0 else 50)
         offset = (offset if offset > 0 else 0) 
-        collections = await CollectionService.list_collections(
-            db,
+        collections = CollectionService.list_collections(
+            session=session,
             limit=limit,
             offset=offset
         )
-        return [CollectionOut.model_validate(collection) for collection in collections]
+        return [CollectionModel.model_validate(collection) for collection in collections]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
@@ -39,23 +42,26 @@ async def get_collections(
         "",
         summary="Créer une collection / table",
         description="Création d'une nouvelle collection / table dans la base de données vectorielle",
-        response_model=CollectionOut
+        response_model=CollectionModel
 )
 async def create(
     payload: CollectionCreate,
-    db: AsyncSession = Depends(get_db),
-    vector_db: DbVectorielleService = Depends(get_vector_db_service)
-) -> CollectionOut:
+    session: Session = Depends(get_db),
+    vector_session: DbVectorielleService = Depends(get_vector_db_service)
+) -> CollectionModel:
     try:
-        await CollectionService.create_collection(
-            db=db, 
-            vector_db=vector_db,
+        user = UserService().get_user_by_name(session=session, username=settings.FIRST_USER_USERNAME)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur non trouvé")
+        CollectionService.create_collection(
+            session=session, 
+            vector_session=vector_session,
             name=payload.name,
             description=payload.description,
-            user_id="a12b8b9d-e0b0-4e84-a7c0-36da6ec16907"
+            user_id=user.id
         )
-        collection = await CollectionService.get_by_name(db=db, name=payload.name)
-        return CollectionOut.model_validate(collection)
+        collection = CollectionService.get_by_name(session=session, name=payload.name)
+        return CollectionModel.model_validate(collection)
     except HTTPException as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
@@ -66,15 +72,15 @@ async def create(
         "/{collection_name}",
         summary="Information sur une collection",
         description="Retourne les information sur la collection",
-        response_model=CollectionOut
+        response_model=CollectionModel
 )
 async def get_collection(
     collection_name: str,
-    db: AsyncSession = Depends(get_db)
-    ) -> CollectionOut:
+    session: Session = Depends(get_db)
+    ) -> CollectionModel:
     try:
-        collection = await CollectionService.get_by_name(db=db, name=collection_name)
-        return CollectionOut.model_validate(collection)
+        collection = CollectionService.get_by_name(session=session, name=collection_name)
+        return CollectionModel.model_validate(collection)
     except HTTPException as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
@@ -84,24 +90,24 @@ async def get_collection(
 @router_collection.get(
         "/{collection_name}/documents",
         summary="Liste des documents indexés dans la collection",
-        response_model=list[DocumentOut]
+        response_model=list[DocumentModel]
 )
 async def get_collection_documents(
     collection_name: str,
     limit: int = 50,
     offset: int = 0,
-    db: AsyncSession = Depends(get_db)
-) -> list[DocumentOut]:
+    session: Session = Depends(get_db)
+) -> list[DocumentModel]:
     try:
         limit = (limit if limit < 50 and limit > 0 else 50)
         offset = (offset if offset > 0 else 0) 
-        documents = await CollectionService.documents_collection(
-            db=db, 
+        documents = CollectionService.documents_collection(
+            session=session, 
             collection_name=collection_name,
             limit=limit,
             offset=offset
         )
-        return [DocumentOut.model_validate(doc) for doc in documents]
+        return [DocumentModel.model_validate(doc) for doc in documents]
     except HTTPException as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -116,13 +122,13 @@ async def get_collection_documents(
 )
 async def delete_collection(
     collection_name: str,
-    db: AsyncSession = Depends(get_db),
-    vector_db: DbVectorielleService = Depends(get_vector_db_service)
+    session: Session = Depends(get_db),
+    vector_session: DbVectorielleService = Depends(get_vector_db_service)
     ) -> bool:
     try:
-        await CollectionService.delete_collection(
-            db=db,
-            vector_db=vector_db,
+        CollectionService.delete_collection(
+            session=session,
+            vector_session=vector_session,
             name=collection_name
         )
         return True

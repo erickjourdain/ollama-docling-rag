@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from schemas import HealthResponse
 
@@ -10,11 +10,11 @@ from .llm_service import LlmService
 class HealthService:
 
     @staticmethod
-    async def check(
-        db: AsyncSession,
+    def check(
+        session: Session,
         vector_db: DbVectorielleService
     ) -> HealthResponse:
-        sqlite_ok = await CollectionService.check_db(db)
+        sqlite_ok = CollectionService.check_db(session=session)
         chroma_ok = vector_db.check_db()
         ollama_status = LlmService().check_ollama()
 

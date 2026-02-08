@@ -1,5 +1,5 @@
 from typing import Sequence
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy import delete, select, text
 
 from db.models import CollectionMetadata, DocumentMetadata
@@ -7,15 +7,15 @@ from db.models import CollectionMetadata, DocumentMetadata
 class CollectionRepository:
     
     @staticmethod
-    async def list_collections(
-        db_session: AsyncSession,
+    def list_collections(
+        session: Session,
         limit: int = 50,
         offset: int = 0
     ) -> Sequence[CollectionMetadata]:
         """liste paginée des collections
 
         Args:
-            db_session (AsyncSession): session sqlite
+            session_session (Session): session sqlite
             limit (int, optional): nombre max de collections retournées. Defaults to 50.
             offset (int, optional): offset. Defaults to 0.
 
@@ -28,18 +28,18 @@ class CollectionRepository:
             .limit(limit)
             .offset(offset)
         )
-        result = await db_session.execute(stmt)
+        result = session.execute(stmt)
         return result.scalars().all()
     
     @staticmethod
-    async def get_by_name(
-        db: AsyncSession, 
+    def get_by_name(
+        session: Session, 
         name: str
     ) -> CollectionMetadata | None:
         """Récupérer une collection à partir de son nom
 
         Args:
-            db_session (AsyncSession): session sqlite
+            session_session (Session): session sqlite
             name (str): nom de la collection
 
         Returns:
@@ -48,41 +48,53 @@ class CollectionRepository:
         stmt = select(CollectionMetadata).where(
             CollectionMetadata.name == name
         )
-        result = await db.execute(stmt)
+        result = session.execute(stmt)
         return result.scalar_one_or_none()
     
     @staticmethod
-    async def create(
-        db: AsyncSession,
+    def create(
+        session: Session,
         collection: CollectionMetadata
     ) -> None:
         """Ajout d'une collection
 
         Args:
-            db_session (AsyncSession): session sqlite
+            session_session (Session): session sqlite
             collection (CollectionMetadata): collection à ajouter
         """
-        db.add(collection)
+        session.add(collection)
 
     @staticmethod
-    async def get_document_collection(
-        db: AsyncSession,
+    def get_document_collection_by_md5(
+        session: Session,
         collection_id: str,
-        document_name: str,
+        md5: str,
     ) -> DocumentMetadata | None:
         stmt = (
             select(DocumentMetadata)
             .where(
                 (DocumentMetadata.collection_id == collection_id) &
-                (DocumentMetadata.filename == document_name)
+                (DocumentMetadata.md5 == md5)
             )
         )
-        result = await db.execute(stmt)
+        result = session.execute(stmt)
         return result.scalar_one_or_none()
     
     @staticmethod
-    async def get_collection_documents(
-        db: AsyncSession,
+    def get_document_collection_by_id(
+        session: Session,
+        document_id: str
+    ) -> DocumentMetadata | None:
+        stmt = (
+            select(DocumentMetadata)
+            .where(DocumentMetadata.id == document_id)
+        )
+        result = session.execute(stmt)
+        return result.scalar_one_or_none()
+    
+    @staticmethod
+    def get_collection_documents(
+        session: Session,
         collecion_id: str,
         limit: int = 50,
         offset: int = 0
@@ -95,52 +107,67 @@ class CollectionRepository:
             .limit(limit=limit)
             .offset(offset=offset)
         )
-        result = await db.execute(stmt)
+        result = session.execute(stmt)
         return result.scalars().all()
 
     @staticmethod
-    async def delete_documents(
-        db: AsyncSession,
+    def delete_documents(
+        session: Session,
         collection_id: str
     ) -> None:
         """Suppression d'un document d'une collection
 
         Args:
-            db (AsyncSession): session sqlite
+            session (Session): session sqlite
             collection_id (str): id de la collection
         """
         stmt = delete(DocumentMetadata).where(
             DocumentMetadata.collection_id == collection_id
         )
-        await db.execute(stmt)
+        session.execute(stmt)
 
     @staticmethod
-    async def delete_collection(
-        db: AsyncSession,
+    def delete_collection(
+        session: Session,
         collection_id: str
     ) -> None:
         """Suppresion d'une collection
 
         Args:
-            db (AsyncSession): session sqlite
+            session (Session): session sqlite
             collection_id (str): id de la collection
         """
         stmt = delete(CollectionMetadata).where(
             CollectionMetadata.id == collection_id
         )
-        await db.execute(stmt)
+        session.execute(stmt)
 
     @staticmethod
-    async def add_document(
-        db: AsyncSession,
+    def add_document(
+        session: Session,
         document: DocumentMetadata
-    ) -> None:
-        db.add(document)
+    ) -> DocumentMetadata:
+        session.add(document)
+        session.commit()
+        session.refresh(document)
+        return document
+    
+    @staticmethod
+    def update_document(
+        session: Session,
+        document: DocumentMetadata
+    ) -> DocumentMetadata:
+        doc = session.get(DocumentMetadata, document.id)
+        if doc:
+            session.commit()
+            session.refresh(doc)
+            return doc
+        raise ValueError("Le document est absent de la base de données")
 
     @staticmethod
-    async def check_sqlite(db: AsyncSession) -> bool:
+    def check_sqlite(session: Session) -> bool:
         try:
-            await db.execute(text("SELECT 1"))
+            session.execute(text("SELECT 1"))
             return True
         except Exception:
             return False

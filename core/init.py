@@ -1,11 +1,14 @@
+import logging
 from pathlib import Path
 
-from db.database import engine
+from db.database import sync_engine
 from db.models import Base
 from core.config import settings
-# from services.db_service import DbService
 
-async def init_app():
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def init_app():
     """Bootstrap de l'application"""
     # Création des répertoires de stockage si nécéssaire
     md_dir = Path(settings.static_dir) / "temp"
@@ -14,13 +17,8 @@ async def init_app():
     tmp_dir.mkdir(exist_ok=True)
 
     # Initialisation de la base de données sqlite
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    with sync_engine.begin() as conn:
+        Base.metadata.create_all(conn)
+        logger.info("initialisation base de données sqlite réalisé")
 
-    # Vérification de l'existence de la table / collection pour gestion des documents
-    # db_service = DbService()
-    # tables = db_service.list_tables()
-    # Création des tables / collections de stockage des informations collections et documents
-    # if settings.db_collections not in tables and settings.db_documents not in tables:
-    #    db_service.create_info_tables()
     
