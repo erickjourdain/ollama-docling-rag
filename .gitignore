@@ -64,5 +64,8 @@ lancedb/
 temp/
 chromadb/
 
+# log
+app.log
+
 # test
 notebooks/

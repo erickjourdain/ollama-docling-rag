@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # Chromadb Databse
     chroma_db_dir: str = "./chromadb" # répertoire de stockage de la base de données
 
+    # Log file
+    APP_LOG_DIR: str = "./app.log" # répertoire de stockage des log de l'application
+
     # LLM
     OLLAMA_URL: str = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
     LLM_MODEL: str = "gemma3:4b" # nom du modèle llm utilisé par défaut
