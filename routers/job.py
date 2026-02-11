@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from core.logging import logger
 from depencies.sqlite_session import get_db
 from services import JobService
 from schemas import JobOut
@@ -40,6 +41,7 @@ def job_status(
             )
         return JobOut.model_validate(job)
     except Exception as e:
+        logger.error(f"Crash inattendu : {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=f"Erreur lors de la lectrure d'un job: {str(e)}"

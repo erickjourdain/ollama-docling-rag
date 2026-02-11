@@ -3,7 +3,9 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from core.exceptions import RAGException
 from core.config import settings
+from core.logging import logger
 from depencies.sqlite_session import get_db
 from depencies.worker import get_workers
 from repositories import job_repository
@@ -50,7 +52,10 @@ def query(
             name=payload.collection_name
         )
         if collection is None:
-            raise Exception(f"La collection {payload.collection_name} n'existe pas")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"La collection {payload.collection_name} n'existe pas"
+            )
         collection = CollectionModel.model_validate(collection)
 
         # 2. Vérification de l'existence du modèle
@@ -59,7 +64,10 @@ def query(
         models = llm_service.list_models()
         noms_models = [model.nom for model in models if not model.embed]
         if model not in noms_models:
-            raise Exception(f"Le modèle '{payload.model}' n'est pas disponible")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"Le modèle '{payload.model}' n'est pas disponible"
+            )
         
         # 3. Récupération de l'utilisateur
         user = UserService.get_user_by_name(
@@ -67,11 +75,14 @@ def query(
             username=settings.FIRST_USER_USERNAME
         )
         if user is None:
-            raise Exception("L'utilisateur n'existe pas")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="L'utilisateur n'existe pas"
+            )
 
         # 4. Création du job dans la base de données
         job_id = str(uuid.uuid4())
-        job = job_repository.create_job(
+        job_repository.create_job(
             session=session, 
             job_id=job_id, 
             input_data={
@@ -83,9 +94,6 @@ def query(
             type="query"
         )
 
-        if job is None:
-            raise Exception("Erreur de la création du job")
-
         # 5. Mise en attente de la requête dans la pile de traitement
         executor.submit(query_collection,
             job_id=job_id,
@@ -95,10 +103,19 @@ def query(
         )
 
         return InsertResponse(job_id=job_id)
-    
-    except Exception as e:
+
+    except HTTPException as he:
+        raise he
+    except RAGException as re:
+        logger.error(f"Erreur lors de l'exécution de la requête {payload.query}: {re.message}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Erreur lors de l'éxcution de la demande: {str(e)}"
-        ) 
+            detail="Erreur lors de l'éxécution de la requête"
+        )
+    except Exception as e:
+        logger.error(f"Crash inattendu : {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail="Erreur lors de l'éxécution de la requête"
+        )
 

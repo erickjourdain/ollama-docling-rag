@@ -2,7 +2,11 @@ from datetime import datetime
 
 from chromadb import Metadata
 from ollama import GenerateResponse
+
+
 from core.config import settings
+from core.logging import logger
+from core.exceptions import RAGException
 from depencies.sqlite_session import SessionLocalSync
 from repositories.job_repository import get_job
 from services import DbVectorielleService, LlmService, JobService
@@ -137,9 +141,18 @@ def query_collection(
             JobService.add_job_log(session, job_id, f"Traitement terminé en {ellapsed_time} s")   
             session.commit()
 
+        except RAGException as re:
+            session.rollback()
+            job.progress="done"
+            job.status="failed"
+            job.error=str(re)
+            session.commit()
+            logger.error(f"Job {job_id} échoué : {re.message}")
+            
         except Exception as e:
             session.rollback()
             job.progress="done"
             job.status="failed"
             job.error=str(e)
             session.commit()
+            logger.critical(f"Erreur système majeure sur job {job_id}", exc_info=True)

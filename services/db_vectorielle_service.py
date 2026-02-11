@@ -1,11 +1,11 @@
-from typing import List
+from typing import List, Sequence
 import uuid
 import chromadb
-from chromadb import QueryResult
+from chromadb import Collection, QueryResult
 from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 from chromadb.api.types import EmbeddingFunction
 
-from schemas.chunk import Chunk
+from schemas import Chunk
 
 class DbVectorielleService:
     """Service pour la gestion de la base de données vectorielles"""
@@ -57,14 +57,20 @@ class DbVectorielleService:
             raise Exception(e)
         
     def query_collection(self, query: str, collection_name: str) -> QueryResult:
+        """Interrogation d'une collection de la base de données
+
+        Args:
+            query (str): requête d'ionterrogation
+            collection_name (str): nom de la collection à interroger
+
+        Returns:
+            QueryResult: résultat de la recherche
+        """
         try:
             collection = self.client.get_collection(
                 name=collection_name, 
                 embedding_function=self.embedding_function
             )
-        except ValueError as e:
-            raise e
-        try:
             return collection.query(
                 query_texts=[query],
                 include=["documents", "metadatas"], 
@@ -73,7 +79,15 @@ class DbVectorielleService:
         except Exception as e:
             raise Exception(e)
         
-    def list_collections(self):
+    def list_collections(self) -> Sequence[Collection]:
+        """Obtenir la liste des collections présentes dans la base de données vectorielles
+
+        Raises:
+            Exception: erreur lors de la lecture de la base
+
+        Returns:
+            Sequence[Collection]: liste des collections
+        """
         try:
             return self.client.list_collections()
         except Exception as e:
@@ -92,9 +106,6 @@ class DbVectorielleService:
                 name=collection_name, 
                 embedding_function=self.embedding_function
             )
-        except ValueError as e:
-            raise e
-        try:
             ids = []
             documents = []
             metadatas = []

@@ -1,7 +1,10 @@
+from pathlib import Path
+import shutil
 import uuid
 from typing import Sequence
 from sqlalchemy.orm import Session
 
+from core.config import settings
 from services import DbVectorielleService
 from repositories.collections_repository import CollectionRepository
 from db.models import CollectionMetadata, DocumentMetadata
@@ -95,9 +98,9 @@ class CollectionService:
             # Commit final
             session.commit()
 
-        except Exception:
+        except Exception as e:
             session.rollback()
-            raise
+            raise Exception(e)
 
         return collection
     
@@ -156,12 +159,16 @@ class CollectionService:
                 collection_id=str(collection.id)
             )
 
+            # Suppression des fichiers sur le disque
+            md_dir = Path(settings.static_dir) / collection.name
+            shutil.rmtree(md_dir, ignore_errors=False)
+
             # Commit final
             session.commit()
 
-        except Exception:
+        except Exception as e:
             session.rollback()
-            raise
+            raise Exception(e)
 
     @staticmethod
     def check_db(session: Session) -> bool:

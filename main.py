@@ -3,11 +3,14 @@ import os
 
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
+from core.exceptions import RAGException
 from core.init import init_app
+from core.logging import logger
 from depencies.sqlite_session import SessionLocalSync
 from routers import router_collection, router_insert, router_query, router_system, router_job
 from core.config import settings
@@ -59,6 +62,18 @@ app.include_router(router_collection)
 app.include_router(router_insert)
 app.include_router(router_job)
 app.include_router(router_system)
+
+@app.exception_handler(RAGException)
+async def rag_exception_handler(request: Request, exc: RAGException):
+    logger.error(f"Erreur applicative: {exc.message} | Détail: {exc.detail}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": exc.message,
+            "detail": exc.detail,
+            "path": request.url.path
+        },
+    )
 
 if __name__ == "__main__":
     import uvicorn

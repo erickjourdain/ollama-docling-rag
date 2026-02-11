@@ -12,6 +12,7 @@ from docling_core.transforms.chunker.hierarchical_chunker import (
 )
 from transformers import AutoTokenizer
 
+from core.exceptions import RAGException
 from schemas import ChunkMetada, Chunk, ChunkingResponse
 
 class MDTableSerializerProvider(ChunkingSerializerProvider):
@@ -73,7 +74,7 @@ class ChunkingService:
             )
 
         except Exception as e:
-            raise Exception(e)
+            raise RAGException("Erreur lors de la définition des metadonnées", str(e))
         
 
     def basic_chunking(self, document: DoclingDocument, document_id: str) -> ChunkingResponse:
@@ -126,5 +127,5 @@ class ChunkingService:
             )
 
         except Exception as e:
-            raise Exception(e)
+            raise RAGException("Erreur chunking Docling", str(e))
         

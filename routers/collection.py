@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from core.config import settings
+from core.logging import logger
 from depencies.sqlite_session import get_db
 from depencies.vector_db import get_vector_db_service
 from services import CollectionService, DbVectorielleService
@@ -31,9 +32,10 @@ def get_collections(
         )
         return [CollectionModel.model_validate(collection) for collection in collections]
     except Exception as e:
+        logger.error(f"Crash inattendu : {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Erreur lors de la récupération des tables: {str(e)}"
+            detail="Erreur lors de la récupération des collections"
         )
     
 @router_collection.post(
@@ -61,9 +63,10 @@ async def create(
         collection = CollectionService.get_by_name(session=session, name=payload.name)
         return CollectionModel.model_validate(collection)
     except HTTPException as e:
+        logger.error(f"Crash inattendu : {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Erreur lors de la création de la collection / table: {str(e)}"
+            detail="Erreur lors de la création de la collection"
         )
     
 @router_collection.get(
@@ -80,9 +83,10 @@ async def get_collection(
         collection = CollectionService.get_by_name(session=session, name=collection_name)
         return CollectionModel.model_validate(collection)
     except HTTPException as e:
+        logger.error(f"Crash inattendu : {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Erreur lors de la lecture des information sur de la collection / table: {str(e)}"
+            detail="Erreur lors de la lecture des information de la collection"
         )
 
 @router_collection.get(
@@ -107,15 +111,16 @@ async def get_collection_documents(
         )
         return [DocumentModel.model_validate(doc) for doc in documents]
     except HTTPException as e:
+        logger.error(f"Crash inattendu : {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la lecture des documents de la collection / table: {str(e)}"
+            detail="Erreur lors de la lecture des documents de la collection"
         )
         
 @router_collection.delete(
         "",
         summary="Supprime une collection / table",
-        description="""Supression d'une collection / table de la base de données""",
+        description="""Supression d'une collection de la base de données""",
         response_model=bool
 )
 async def delete_collection(
@@ -131,6 +136,12 @@ async def delete_collection(
         )
         return True
     except ValueError:
-        raise HTTPException(status_code=404, detail="Collection not found")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La collection n'existe pas'")
     except PermissionError:
-        raise HTTPException(status_code=403, detail="Forbidden")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    except Exception as e:
+        logger.error(f"Crash inattendu : {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erreur lors de la suppression de la collection"
+        )

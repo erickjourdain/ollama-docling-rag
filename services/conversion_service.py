@@ -16,6 +16,7 @@ from docling.datamodel.pipeline_options import (
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
 from core.config import settings
+from core.exceptions import DocumentParsingError, RAGException
 from core.security import hash_file
 from schemas import ConvertPdfResponse
 from repositories.collections_repository import CollectionRepository
@@ -121,27 +122,31 @@ class ConversionService:
         """
 
         try: 
-            # Configuration des options de conversion PDF
-            pipeline_options = PdfPipelineOptions()
-            pipeline_options.do_ocr = False
-            pipeline_options.images_scale = settings.image_resolution_scale
-            pipeline_options.generate_picture_images = True
-            pipeline_options.do_table_structure = True
-            pipeline_options.table_structure_options = TableStructureOptions(
-                mode = TableFormerMode.ACCURATE
-            )
-            pipeline_options.accelerator_options = AcceleratorOptions(
-                num_threads=4, device=AcceleratorDevice.AUTO
-            )
+            try: 
+                # Configuration des options de conversion PDF
+                pipeline_options = PdfPipelineOptions()
+                pipeline_options.do_ocr = False
+                pipeline_options.images_scale = settings.image_resolution_scale
+                pipeline_options.generate_picture_images = True
+                pipeline_options.do_table_structure = True
+                pipeline_options.table_structure_options = TableStructureOptions(
+                    mode = TableFormerMode.ACCURATE
+                )
+                pipeline_options.accelerator_options = AcceleratorOptions(
+                    num_threads=4, device=AcceleratorDevice.AUTO
+                )
 
-            # Conversion du document
-            start_time = time.time()
-            doc_converter = DocumentConverter(
-                format_options={
-                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-                }
-            )
-            convert_doc = doc_converter.convert(file_path)
+                # Conversion du document
+                start_time = time.time()
+                doc_converter = DocumentConverter(
+                    format_options={
+                        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                    }
+                )
+                convert_doc = doc_converter.convert(file_path)
+            
+            except Exception as e:
+                raise DocumentParsingError("Erreur docling", str(e))
 
             # Gestion des répertoires de stockage
             md_dir = Path(settings.static_dir) / collection_name
@@ -174,7 +179,10 @@ class ConversionService:
                 conversion_time=elapsed_time
             )
         
+        except RAGException as re:
+            raise re
+
         except Exception as e:
-            raise Exception(e)
+            raise e
 
         

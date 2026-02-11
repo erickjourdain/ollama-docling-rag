@@ -17,8 +17,13 @@ class JobService:
 
     @staticmethod
     def add_job_log(session: Session, job_id: str, message: str, level: str = "INFO"):
-        """
-        Ajoute une entrée horodatée dans la colonne JSON logs du job.
+        """Ajout d'une ligne de log dans un job
+
+        Args:
+            session (Session): session d'accès à la base de données
+            job_id (str): identifiant du job
+            message (str): message d'information sur le log
+            level (str, optional): niveau du log. Defaults to "INFO".
         """
         job = JobService.get_job(session=session, job_id=job_id)
         if job:

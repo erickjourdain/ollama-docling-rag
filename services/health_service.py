@@ -14,17 +14,32 @@ class HealthService:
         session: Session,
         vector_db: DbVectorielleService
     ) -> HealthResponse:
-        sqlite_ok = CollectionService.check_db(session=session)
-        chroma_ok = vector_db.check_db()
-        ollama_status = LlmService().check_ollama()
+        """_summary_
 
-        status = "ok" if (
-            sqlite_ok and chroma_ok and ollama_status.ok
-        ) else "degraded"
+        Args:
+            session (Session): session d'accès à la base de données
+            vector_db (DbVectorielleService): service d'accès à la base de données vectorielle
 
-        return HealthResponse(
-            status=status,
-            sqlite=sqlite_ok,
-            chromadb=chroma_ok,
-            ollama=ollama_status
-        )
+        Raises:
+            Exception: erreur lors de la vérification des services
+
+        Returns:
+            HealthResponse: état de l'application
+        """
+        try:
+            sqlite_ok = CollectionService.check_db(session=session)
+            chroma_ok = vector_db.check_db()
+            ollama_status = LlmService().check_ollama()
+
+            status = "ok" if (
+                sqlite_ok and chroma_ok and ollama_status.ok
+            ) else "degraded"
+
+            return HealthResponse(
+                status=status,
+                sqlite=sqlite_ok,
+                chromadb=chroma_ok,
+                ollama=ollama_status
+            )
+        except Exception as e:
+            raise Exception(e)

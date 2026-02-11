@@ -3,8 +3,10 @@ from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor
 import uuid
 
+from core.exceptions import RAGException
 from core.utility import delete_file
 from core.config import settings
+from core.logging import logger
 from depencies.sqlite_session import get_db
 from depencies.worker import get_workers
 from repositories import job_repository
@@ -41,14 +43,20 @@ async def process_pdf(
             name=collection_name
         )
         if collection is None:
-            raise Exception("La collection doit être créée avant d'y insérer un document")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"La collection {collection_name} n'existe pas"
+            )
         collection = CollectionModel.model_validate(collection)
 
         is_pdf = ConversionService.check_pdf(
             file=file
         )
         if not is_pdf:
-            raise Exception("Le fichier fourni n'est pas un fichier pdf")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Le fichier fourni n'est pas un fichier pdf"
+            )
 
         # 2. Sauvegarde du fichier
         job_id = str(uuid.uuid4())
@@ -67,7 +75,10 @@ async def process_pdf(
         )
         if file_exist:
             delete_file(file_path=file_path)
-            raise Exception("Le fichier est déjà présent dans la collection")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Le fichier est déjà présent dans la collection"
+            )
 
         # 4. Récupération de l'utilisateur
         user = UserService.get_user_by_name(
@@ -75,7 +86,10 @@ async def process_pdf(
             username=settings.FIRST_USER_USERNAME
         )
         if user is None:
-            raise Exception("L'utilisateur n'existe pas")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="L'utilisateur n'existe pas"
+            )
         
         # 5. Création du job dans la base de données
         job_repository.create_job(
@@ -101,10 +115,19 @@ async def process_pdf(
         )
 
         return InsertResponse(job_id=job_id)
-        
-    except Exception as e:
+
+    except HTTPException as he:
+        raise he
+    except RAGException as re:
+        logger.error(f"Erreur lors de l'insertion du fichier {file.filename} dans la collection {collection_name}: {re.message}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Erreur lors du traitement du PDF: {str(e)}"
+            detail="Erreur lors du traitement du PDF"
+        )
+    except Exception as e:
+        logger.error(f"Crash inattendu : {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail="Erreur lors du traitement du PDF"
         )
     

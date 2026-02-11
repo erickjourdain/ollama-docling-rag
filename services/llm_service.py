@@ -5,6 +5,7 @@ from chromadb import Metadata
 from dotenv import load_dotenv
 from ollama import Client, GenerateResponse
 
+from core.exceptions import OllamaError, RAGException
 from schemas import Model
 from core.config import settings
 from schemas.health import OllamaHealth
@@ -56,7 +57,7 @@ class LlmService:
             return reponse.response
         
         except Exception as e:
-            raise Exception(e)
+            raise OllamaError("Erreur Ollama lors de la création de la requête d'interrogation de la base vectorielle", str(e))
         
     def __define_context(self, docs: List[str], metadatas: List[Metadata]) -> str:
         """ Définition du contexte à partir des chunks fournis par la base vectorielle
@@ -91,7 +92,7 @@ class LlmService:
             return str()
         
         except Exception as e:
-            raise Exception(e)
+            raise RAGException("Erreur Ollama lors de la création du contexte", str(e))
         
     def create_answer(
             self, 
@@ -157,7 +158,7 @@ class LlmService:
             )
         
         except Exception as e:
-            raise Exception(e)
+            raise OllamaError("Erreur Ollama lors de la génération de la réponse à la requête", str(e))
         
     def rerank_chunks_llm(self, query: str, chunks: list[str]) -> list[int]:
         """ Reranking des réponses (chunks) en fonction de leur pertinence
@@ -208,7 +209,7 @@ class LlmService:
             ]
         
         except Exception as e:
-            raise Exception(e)
+            raise OllamaError("Erreur Ollama lors du reranking des chunks", str(e))
         
     def list_models(self) -> list[Model]:
         """Récupération des modèles disponibles
@@ -235,9 +236,14 @@ class LlmService:
             return models
         
         except Exception as e:
-            raise Exception(e)
+            raise OllamaError("Erreur Ollama lors de la récupération des modèles", str(e))
         
     def check_ollama(self) -> OllamaHealth:
+        """Vértification de l'état du serveur Ollama
+
+        Returns:
+            OllamaHealth: état du serveur
+        """
         try:
             models = self.list_models()
             return OllamaHealth(

@@ -13,6 +13,15 @@ class UserService:
         session: Session,
         user_id: str
     ) -> User | None:
+        """Récupération d'un utilisateur via son identifiant
+
+        Args:
+            session (Session): session d'accès à la base de données
+            user_id (str): identifiant de l'utilisateur
+
+        Returns:
+            User | None: utilisateur
+        """
         return user_repository.get_user(session=session, user_id=user_id)
 
     @staticmethod
@@ -33,6 +42,14 @@ class UserService:
     def create_first_admin(
         session: Session
     ) -> User | None:
+        """Créer le premier utilisateur en tant qu'administrateur de la base
+
+        Args:
+            session (Session): session d'accès à la base de données
+
+        Returns:
+            User | None: utilisateur créé
+        """
         nb_users = user_repository.nb_users(session=session)
         if nb_users == 0:
             user = UserCreate(
@@ -51,6 +68,15 @@ class UserService:
         session: Session,
         username: str
     ) -> User | None:
+        """Récupération d'un utilisateur via son nom
+
+        Args:
+            session (Session): session d'accès à la base de données
+            username (str): nom de l'utilisateur recherché
+
+        Returns:
+            User | None: utilisateur
+        """
         db_user = user_repository.get_user_by_name(
             session=session, 
             username=username

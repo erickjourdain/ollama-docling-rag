@@ -1,7 +1,9 @@
 from datetime import datetime
 from pathlib import Path
 
+from core.exceptions import RAGException
 from core.security import hash_file
+from core.logging import logger
 from core.config import settings
 from db.models import DocumentMetadata
 from depencies.sqlite_session import SessionLocalSync
@@ -38,6 +40,7 @@ def insert_pdf(
         start_time = datetime.now()
         job = get_job(session=session, job_id=job_id)
         if job is None:
+            logger.error(f"Job {job_id} inconnu")
             raise Exception("Aucun job avec cet identifiant dans la base")
         
         try:           
@@ -112,11 +115,20 @@ def insert_pdf(
             job.status="completed"
             job.finished_at=datetime.now()
             session.commit()
-            JobService.add_job_log(session, job_id, f"Traitement terminé en {ellapsed_time} s")   
+            JobService.add_job_log(session, job_id, f"Traitement terminé en {ellapsed_time} s")
 
+        except RAGException as re:
+            session.rollback()
+            job.progress="done"
+            job.status="failed"
+            job.error=str(re)
+            session.commit()
+            logger.error(f"Job {job_id} échoué : {re.message}")
+            
         except Exception as e:
             session.rollback()
             job.progress="done"
             job.status="failed"
             job.error=str(e)
             session.commit()
+            logger.critical(f"Erreur système majeure sur job {job_id}", exc_info=True)

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from core.logging import logger
 from depencies.sqlite_session import get_db
 from depencies.vector_db import get_vector_db_service
 from services import DbVectorielleService, LlmService, HealthService
@@ -25,8 +26,15 @@ def health_check(
     session: Session = Depends(get_db),
     vector_db: DbVectorielleService = Depends(get_vector_db_service)
     ) -> HealthResponse:
-    return HealthService.check(session=session, vector_db=vector_db)
-
+    try:
+        return HealthService.check(session=session, vector_db=vector_db)
+    except Exception as e:
+        logger.error(f"Crash inattendu : {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail="Erreur lors de la vérification des services"
+        )
+    
 @router_system.get(
     "/models",
     response_model=list[Model],
@@ -39,7 +47,8 @@ def list_models() -> list[Model]:
         llm_service = LlmService()
         return llm_service.list_models()
     except Exception as e:
+        logger.error(f"Crash inattendu : {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Erreur lors du chargement des modèles: {str(e)}"
+            detail="Erreur lors du chargement des modèles"
         )
