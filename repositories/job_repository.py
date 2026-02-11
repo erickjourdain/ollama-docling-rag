@@ -20,9 +20,10 @@ def update_job_progress(
 def create_job(
     session: Session,
     job_id: str,
-    input_data: str | None
+    input_data: dict[str, str | None] | None,
+    type: str
 ):
-    new_job=Job(id=job_id, input_data=input_data)
+    new_job=Job(id=job_id, input_data=input_data, type=type)
     session.add(new_job)
     session.commit()
     session.refresh(new_job)

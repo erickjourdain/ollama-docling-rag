@@ -9,9 +9,6 @@ class Settings(BaseSettings):
     # Nombre maximum de worker de l'application
     max_worker: int = 1
 
-    # Struture de stockage des documents
-    temp_dir: str = "./temp" # répertoire temportaire de stockage des fichiers à insérer
-
     # Static files
     static_url: str= "/data"
     static_dir: Path = Path("data/files")

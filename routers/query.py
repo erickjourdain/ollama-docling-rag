@@ -9,7 +9,7 @@ from depencies.worker import get_workers
 from repositories import job_repository
 from schemas import QueryRequest, CollectionModel
 from schemas.response import InsertResponse
-from services import CollectionService, LlmService
+from services import CollectionService, LlmService, UserService
 from worker.query_collection import query_collection
 
 router_query = APIRouter(prefix="/query", tags=["Query"])
@@ -60,19 +60,33 @@ def query(
         noms_models = [model.nom for model in models if not model.embed]
         if model not in noms_models:
             raise Exception(f"Le modèle '{payload.model}' n'est pas disponible")
+        
+        # 3. Récupération de l'utilisateur
+        user = UserService.get_user_by_name(
+            session=session, 
+            username=settings.FIRST_USER_USERNAME
+        )
+        if user is None:
+            raise Exception("L'utilisateur n'existe pas")
 
-        # 3. Création du job dans la base de données
+        # 4. Création du job dans la base de données
         job_id = str(uuid.uuid4())
         job = job_repository.create_job(
             session=session, 
             job_id=job_id, 
-            input_data=payload.query
+            input_data={
+                "query": payload.query,
+                "model": payload.model,
+                "collection": payload.collection_name,
+                "user": user.username
+            },
+            type="query"
         )
 
         if job is None:
             raise Exception("Erreur de la création du job")
 
-        # 3. Mise en attente de la requête dans la pile de traitement
+        # 5. Mise en attente de la requête dans la pile de traitement
         executor.submit(query_collection,
             job_id=job_id,
             query=payload.query,

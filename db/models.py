@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import Optional
-from sqlalchemy import String, Text, ForeignKey, DateTime, Boolean
+from typing import Any, Optional
+from sqlalchemy import String, Text, ForeignKey, DateTime, Boolean, JSON
 from sqlalchemy.orm import Mapped, DeclarativeBase, mapped_column, relationship
 
 class Base(DeclarativeBase):
@@ -15,7 +15,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String)
     role: Mapped[str] = mapped_column(String(25), default="USER")
     hashed_password: Mapped[str] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     is_active: Mapped[bool] = mapped_column(default=True)
  
 class CollectionMetadata(Base):
@@ -27,7 +27,7 @@ class CollectionMetadata(Base):
     description: Mapped[str] = mapped_column(Text,)
     created_by: Mapped[str] = mapped_column(Text, ForeignKey("users.id"), nullable=False)
     creator: Mapped[User] = relationship("User", lazy="joined")
-    date_creation: Mapped[datetime] = mapped_column(DateTime, default=datetime.now())
+    date_creation: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 class DocumentMetadata(Base):
     """Modèle document pour gestion des métadonnées des documents"""
@@ -39,7 +39,7 @@ class DocumentMetadata(Base):
     inserted_by: Mapped[str] = mapped_column(Text, ForeignKey("users.id"), nullable=False)
     creator: Mapped[User] = relationship("User", lazy="joined")
     md5: Mapped[str] = mapped_column(Text)
-    date_insertion: Mapped[datetime] = mapped_column(DateTime, default=datetime.now())
+    date_insertion: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     is_indexed: Mapped[bool] = mapped_column(Boolean, default=False)
 
 class Job(Base):
@@ -47,10 +47,12 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, index=True)
-    status: Mapped[str]  = mapped_column(default="queued")  # queued, processing, completed, failed
-    progress: Mapped[str]  = mapped_column(default="conversion")    # conversion, chunking, embeddings, done
-    input_data: Mapped[str]  = mapped_column(Text)
-    result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(default="queued")  
+    progress: Mapped[str] = mapped_column(default="conversion")
+    logs: Mapped[list] = mapped_column(JSON, default=list)
+    type: Mapped[str] = mapped_column(Text)
+    input_data: Mapped[str] = mapped_column(JSON)
+    result: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)

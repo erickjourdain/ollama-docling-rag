@@ -11,10 +11,8 @@ logger = logging.getLogger(__name__)
 def init_app():
     """Bootstrap de l'application"""
     # Création des répertoires de stockage si nécéssaire
-    md_dir = Path(settings.static_dir) / "temp"
+    md_dir = Path(settings.static_dir)
     md_dir.mkdir(exist_ok=True)
-    tmp_dir = Path(settings.temp_dir)
-    tmp_dir.mkdir(exist_ok=True)
 
     # Initialisation de la base de données sqlite
     with sync_engine.begin() as conn:

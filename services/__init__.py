@@ -5,6 +5,7 @@ from .collection_service import CollectionService
 from .health_service import HealthService
 from .conversion_service import ConversionService
 from .user_service import UserService
+from .job_service import JobService
 
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "HealthService",
     "LlmService",
     "CollectionService",
-    "UserService"
+    "UserService",
+    "JobService"
 ]

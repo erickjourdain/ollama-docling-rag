@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from depencies.sqlite_session import get_db
-from services import job_service
+from services import JobService
 from schemas import JobOut
 
 
@@ -32,7 +32,7 @@ def job_status(
         Job: Etat du job d'insertion
     """
     try:
-        job = job_service.get_job(session=session, job_id=job_id)
+        job = JobService.get_job(session=session, job_id=job_id)
         if job is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, 

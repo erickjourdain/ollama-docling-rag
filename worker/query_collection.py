@@ -1,12 +1,11 @@
 from datetime import datetime
-import json
 
 from chromadb import Metadata
 from ollama import GenerateResponse
 from core.config import settings
 from depencies.sqlite_session import SessionLocalSync
-from repositories.job_repository import get_job, update_job_progress
-from services import DbVectorielleService, LlmService
+from repositories.job_repository import get_job
+from services import DbVectorielleService, LlmService, JobService
 
 def query_collection(
     job_id: str,
@@ -14,17 +13,30 @@ def query_collection(
     model: str,
     collection_name: str
 ):
+    """Interrogation de la base de connaissance via une requête utilisateur
+
+    Args:
+        job_id (str): identifiant du job
+        query (str): requête (prompt) de l'utilisateur
+        model (str): modèle à utiliser pour la génération de la réponse
+        collection_name (str): nom de la collection à interroger
+
+    Raises:
+        Exception: Erreur levée lors de la génération de la réponse
+    """    
     
     with SessionLocalSync() as session:
+        # Lancement du traitement
+        start_time = datetime.now()
+        job = get_job(session=session, job_id=job_id)
+        if job is None:
+            raise Exception("Aucun job avec cet identifiant dans la base")
+        
         try:
-            # Lancement du traitement
-            job = get_job(session=session, job_id=job_id)
-            if job is None:
-                raise Exception("Aucun job avec cet identifiant dans la base")
-            
             job.progress = "initialisation"
             job.status = "processing"
             session.commit()
+            JobService.add_job_log(session, job_id, "Démarrage du traitement de la requête")
     
             db_vector_service = DbVectorielleService(
                 chroma_db_dir=settings.chroma_db_dir,
@@ -35,6 +47,7 @@ def query_collection(
             # Reformulation de la requête pour interrogation base vectorielle
             job.progress = "query reformulation"
             session.commit()
+            JobService.add_job_log(session, job_id, "Reformulation de la requête")   
 
             llm_service =  LlmService()
             vectordb_query = llm_service.vectordb_query(query=query, model=model)
@@ -42,6 +55,7 @@ def query_collection(
             # Requête pour interrogation base vectorielle
             job.progress = "query database"
             session.commit()
+            JobService.add_job_log(session, job_id, "Interrogation de la base vectorielle")   
 
             result = db_vector_service.query_collection(
                 query=vectordb_query, 
@@ -50,6 +64,7 @@ def query_collection(
 
             documents = result.get("documents")
             metadatas = result.get("metadatas")
+            JobService.add_job_log(session, job_id, "Vérification des documents retournés")   
 
             # Vérification que la requête à retourner des éléments
             if (
@@ -58,7 +73,7 @@ def query_collection(
                 or not metadatas
                 or not metadatas[0]
             ):
-                job.result = json.dumps(GenerateResponse(
+                job.result = GenerateResponse(
                     model=model,
                     created_at=datetime.now().isoformat(),
                     done=False,
@@ -77,16 +92,18 @@ def query_collection(
                             }
                         '''
                     """
-                ))
+                ).model_dump(mode="json")
                 job.progress = "done"
                 job.status = "completed"
                 job.finished_at = datetime.now()
                 session.commit()
+                JobService.add_job_log(session, job_id, "Fin du traitement: aucun document trouvé")   
                 return
             
             # Reranking des documents
             job.progress = "reranking"
             session.commit()
+            JobService.add_job_log(session, job_id, "Reranking des documents")   
 
             documents = documents[0]
             metadatas = metadatas[0]
@@ -102,6 +119,7 @@ def query_collection(
             # Génération de la réponse
             job.progress = "generation answer"
             session.commit()
+            JobService.add_job_log(session, job_id, "Interrogation du LLM")   
 
             response = llm_service.create_answer(
                 docs=reranked_docs, 
@@ -110,18 +128,18 @@ def query_collection(
                 model=model
             )
 
+            # Fin de traitement
+            ellapsed_time = datetime.now() - start_time
             job.progress = "done"
             job.status = "completed"
             job.finished_at = datetime.now()
-            job.result = json.dumps(response.model_dump_json(), ensure_ascii=False)
+            job.result = response.model_dump(mode="json")
+            JobService.add_job_log(session, job_id, f"Traitement terminé en {ellapsed_time} s")   
             session.commit()
 
         except Exception as e:
             session.rollback()
-            update_job_progress(
-                session=session, 
-                job_id=job_id, 
-                progress="done", 
-                status="failed",
-                error=str(e)
-            )
+            job.progress="done"
+            job.status="failed"
+            job.error=str(e)
+            session.commit()

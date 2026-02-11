@@ -52,12 +52,11 @@ async def process_pdf(
 
         # 2. Sauvegarde du fichier
         job_id = str(uuid.uuid4())
-        doc_id = str(uuid.uuid4())
-        filename=f"{doc_id}.pdf"
+        doc_id = uuid.uuid4()
         file_path = await ConversionService.save_pdf(
             file=file, 
             collection_name=collection_name, 
-            filename=filename
+            filename=f"{doc_id}.pdf"
         )
 
         # 3. Vérification de la présence du fichier dans la collection
@@ -70,14 +69,7 @@ async def process_pdf(
             delete_file(file_path=file_path)
             raise Exception("Le fichier est déjà présent dans la collection")
 
-        # 4. Création du job dans la base de données
-        job_repository.create_job(
-            session=session, 
-            job_id=job_id, 
-            input_data=filename
-        )
-
-        # 5. Récupération de l'utilisateur
+        # 4. Récupération de l'utilisateur
         user = UserService.get_user_by_name(
             session=session, 
             username=settings.FIRST_USER_USERNAME
@@ -85,10 +77,24 @@ async def process_pdf(
         if user is None:
             raise Exception("L'utilisateur n'existe pas")
         
+        # 5. Création du job dans la base de données
+        job_repository.create_job(
+            session=session, 
+            job_id=job_id, 
+            input_data={
+                'filename': file.filename,
+                'doc_id': str(doc_id),
+                'collection': collection.name,
+                'user': user.username
+            },
+            type="insertion"
+        )
+        
         # 6. Mise en attente du document dans la pile de traitement
         executor.submit(insert_pdf,
             file_path=file_path,
-            filename=filename, 
+            filename=file.filename or 'unknown',
+            doc_id=str(doc_id),
             collection=collection,
             job_id=job_id,
             user_id=user.id
