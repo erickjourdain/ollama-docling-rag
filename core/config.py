@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     image_resolution_scale: float = 2.0
 
     # Sqlite Database
-    SQLITE_DB: str = "./data/metadata.db" # chemin de la base
+    SQLITE_DB: str = "./data/rag_db.sqlite" # chemin de la base
 
     # Chromadb Databse
     CHROMA_DB: str = "./chromadb" # répertoire de stockage de la base de données

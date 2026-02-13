@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Optional
-from sqlalchemy import String, Text, ForeignKey, DateTime, Boolean, JSON
+from sqlalchemy import CheckConstraint, String, Text, ForeignKey, DateTime, Boolean, JSON
 from sqlalchemy.orm import Mapped, DeclarativeBase, mapped_column, relationship
 
 class Base(DeclarativeBase):
@@ -23,11 +23,25 @@ class CollectionMetadata(Base):
     __tablename__ = "collections_metadata"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(25), unique=True, nullable=False)
     description: Mapped[str] = mapped_column(Text,)
     created_by: Mapped[str] = mapped_column(Text, ForeignKey("users.id"), nullable=False)
     creator: Mapped[User] = relationship("User", lazy="joined")
     date_creation: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    __table_args__ = (
+            CheckConstraint(
+                "length(name) >= 5 AND length(name) <= 25", 
+                name="name_length_check"
+            ),
+            # SQLite supporte le filtrage par REGEXP si l'extension est chargée, 
+            # sinon on utilise GLOB pour une vérification basique :
+            CheckConstraint(
+                "name NOT LIKE '% %'", # Pas d'espaces
+                name="no_space_check"
+            ),
+        )
+
 
 class DocumentMetadata(Base):
     """Modèle document pour gestion des métadonnées des documents"""
