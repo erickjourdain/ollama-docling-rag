@@ -50,7 +50,7 @@ def insert_pdf(
             JobService.add_job_log(session, job_id, f"Démarrage du traitement pour {filename}")     
 
             db_vector_service = DbVectorielleService(
-                chroma_db_dir=settings.chroma_db_dir,
+                chroma_db=settings.CHROMA_DB,
                 embedding_model=settings.LLM_EMBEDDINGS_MODEL,
                 ollama_url=settings.OLLAMA_URL
             )

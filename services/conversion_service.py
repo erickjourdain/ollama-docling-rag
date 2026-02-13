@@ -23,23 +23,6 @@ from repositories.collections_repository import CollectionRepository
 
 class ConversionService:
     """Service pour gérer l'envoi des fichiers pdf"""
-
-    @staticmethod
-    def check_pdf(
-        file: UploadFile,
-    ) -> bool:
-        """Vérification si le fichier est un fichier pdf
-
-        Args:
-            file (UploadFile): fichier à insérer
-
-        Returns:
-            bool: Etat de la vérification
-        """
-        # Vérification que le fichier fourni est bien un fichier pdf
-        if not file.filename or not file.filename.lower().endswith(".pdf"):
-            return False
-        return True
     
     @staticmethod
     async def save_pdf(
@@ -61,7 +44,7 @@ class ConversionService:
         """
         try:
             # Gestion du répertoires de stockage
-            md_dir = Path(settings.static_dir) / collection_name
+            md_dir = Path(settings.STATIC_DIR) / collection_name
             md_dir.mkdir(exist_ok=True)
 
             # Enregistrement du fichier
@@ -149,7 +132,7 @@ class ConversionService:
                 raise DocumentParsingError("Erreur docling", str(e))
 
             # Gestion des répertoires de stockage
-            md_dir = Path(settings.static_dir) / collection_name
+            md_dir = Path(settings.STATIC_DIR) / collection_name
             md_dir.mkdir(exist_ok=True)
             doc_uuid = convert_doc.input.file.stem
             md_filename = md_dir / f"{doc_uuid}.md"

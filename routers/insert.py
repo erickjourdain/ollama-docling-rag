@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor
 import uuid
 
+from core import security
 from core.exceptions import RAGException
 from core.utility import delete_file
 from core.config import settings
@@ -49,14 +50,7 @@ async def process_pdf(
             )
         collection = CollectionModel.model_validate(collection)
 
-        is_pdf = ConversionService.check_pdf(
-            file=file
-        )
-        if not is_pdf:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="Le fichier fourni n'est pas un fichier pdf"
-            )
+        await security.validate_pdf(file=file)
 
         # 2. Sauvegarde du fichier
         job_id = str(uuid.uuid4())

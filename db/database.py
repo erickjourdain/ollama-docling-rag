@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, event
 from core.config import settings
 
-SYNC_DATABASE_URL = f"sqlite:///./{settings.sqlite_db_dir}"
+SYNC_DATABASE_URL = f"sqlite:///./{settings.SQLITE_DB}"
 
 sync_engine = create_engine(
     url=SYNC_DATABASE_URL, 

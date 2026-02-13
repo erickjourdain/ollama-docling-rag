@@ -10,8 +10,8 @@ from schemas import Chunk
 class DbVectorielleService:
     """Service pour la gestion de la base de données vectorielles"""
 
-    def __init__(self, chroma_db_dir: str, embedding_model: str, ollama_url: str):
-        self.client = chromadb.PersistentClient(path=chroma_db_dir)
+    def __init__(self, chroma_db: str, embedding_model: str, ollama_url: str):
+        self.client = chromadb.PersistentClient(path=chroma_db)
         self.embedding_function: EmbeddingFunction = OllamaEmbeddingFunction(
             model_name=embedding_model,
             url=ollama_url

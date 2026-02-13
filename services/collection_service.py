@@ -160,7 +160,7 @@ class CollectionService:
             )
 
             # Suppression des fichiers sur le disque
-            md_dir = Path(settings.static_dir) / collection.name
+            md_dir = Path(settings.STATIC_DIR) / collection.name
             shutil.rmtree(md_dir, ignore_errors=False)
 
             # Commit final

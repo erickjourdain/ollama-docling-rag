@@ -3,6 +3,7 @@ bcrypt
 chromadb
 docling[ocrmac]
 fastapi
+filetype
 lancedb
 ollama
 pydantic

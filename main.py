@@ -23,12 +23,12 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     init_app()
     app.state.vector_db_service = DbVectorielleService(
-        chroma_db_dir=settings.chroma_db_dir,
+        chroma_db=settings.CHROMA_DB,
         embedding_model=settings.LLM_EMBEDDINGS_MODEL,
         ollama_url=settings.OLLAMA_URL
     )
     # Définition du nombre de workers disponibles pour l'application
-    app.state.executor = ThreadPoolExecutor(max_workers=settings.max_worker)
+    app.state.executor = ThreadPoolExecutor(max_workers=settings.MAX_WORKER)
     # Création de l'administrateur au premier démarrage de l'application
     with SessionLocalSync() as session:
         UserService().create_first_admin(session=session)
@@ -54,7 +54,7 @@ app.add_middleware(
 )
 
 # Static files configuration
-app.mount(settings.static_url, StaticFiles(directory=settings.static_dir), name="data")
+app.mount(settings.STATIC_URL, StaticFiles(directory=settings.STATIC_DIR), name="data")
 
 # Insertion des routes
 app.include_router(router_query)

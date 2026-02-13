@@ -7,18 +7,18 @@ load_dotenv()
 
 class Settings(BaseSettings):
     # Nombre maximum de worker de l'application
-    max_worker: int = 1
+    MAX_WORKER: int = int(os.environ.get("MAX_WORKER", 1))
 
     # Static files
-    static_url: str= "/data"
-    static_dir: Path = Path("data/files")
+    STATIC_URL: str= "/data"
+    STATIC_DIR: Path = Path("data/files")
     image_resolution_scale: float = 2.0
 
     # Sqlite Database
-    sqlite_db_dir: str = "./data/metadata.db" # chemin de la base
+    SQLITE_DB: str = "./data/metadata.db" # chemin de la base
 
     # Chromadb Databse
-    chroma_db_dir: str = "./chromadb" # répertoire de stockage de la base de données
+    CHROMA_DB: str = "./chromadb" # répertoire de stockage de la base de données
 
     # Log file
     APP_LOG_DIR: str = "./app.log" # répertoire de stockage des log de l'application
