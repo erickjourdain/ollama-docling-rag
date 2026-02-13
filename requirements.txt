@@ -8,6 +8,7 @@ lancedb
 ollama
 pydantic
 pydantic-settings
+pypdf
 python-dotenv
 python-multipart
 sqlalchemy[asyncio]

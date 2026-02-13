@@ -1,8 +1,10 @@
 import hashlib
+from io import BytesIO
 from pathlib import Path
 import bcrypt
 from fastapi import HTTPException, UploadFile, status
 import filetype
+from pypdf import PdfReader
 
 def _prepare_password(password: str) -> bytes:
     """
@@ -58,6 +60,8 @@ async def validate_pdf(file: UploadFile):
         HTTPException: Seuls les fichiers PDF sont acceptés.
         HTTPException: Impossible de déterminer le type de fichier.
         HTTPException: Fichier invalide.
+        HTTPException: PDF protégé par mot de passe.
+        HTTPException: PDF corrompu ou illisible.
     """
     # 1. Vérification que le fichier n'est pas vide
     if file.filename is None or file.filename.strip() == "":
@@ -90,4 +94,23 @@ async def validate_pdf(file: UploadFile):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Fichier invalide. Type détecté : {kind.mime} au lieu de application/pdf."
+        )
+
+    # 4. Vérification du Mot de Passe (Chiffrement)
+    # On lit le fichier en mémoire pour pypdf (seulement les métadonnées)
+    content = await file.read()
+    await file.seek(0) # Toujours remettre au début !
+    
+    try:
+        reader = PdfReader(BytesIO(content))
+        if reader.is_encrypted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ce PDF est protégé par un mot de passe et ne peut pas être traité."
+            )
+    except Exception:
+        # Si pypdf n'arrive même pas à lire la structure, le PDF est corrompu
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le fichier PDF semble corrompu ou illisible."
         )
