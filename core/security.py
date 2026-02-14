@@ -3,15 +3,16 @@ import hashlib
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Union
+import uuid
+import bcrypt
 from fastapi import HTTPException, UploadFile, status
 import filetype
 from jose import jwt
-from passlib.context import CryptContext
 from pypdf import PdfReader
 
 from .config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 def create_access_token(subject: Union[str, Any]) -> str:
     """Création du jetond'accès à l'application
@@ -22,9 +23,20 @@ def create_access_token(subject: Union[str, Any]) -> str:
     Returns:
         str: jeton d'accès encodé
     """
-    expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode = {"exp": expire, "sub": str(subject)}
+    expire = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode = {"exp": expire, "sub": str(subject), "jti": str(uuid.uuid4())}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+def _prepare_password(password: str) -> bytes:
+    """Prépare le mot de passe en le hachant en SHA-256 pour contourner la limite des 72 octets de bcrypt.
+
+    Args:
+        password (str): mot de passe en clair à préparer pour le hachage
+
+    Returns:
+        bytes: mot de passe préparé (haché en SHA-256) prêt à être utilisé avec bcrypt
+    """
+    return hashlib.sha256(password.encode("utf-8")).digest()
 
 def get_password_hash(password: str) -> str:
     """Retourne le hash d'un mot de passe
@@ -35,7 +47,15 @@ def get_password_hash(password: str) -> str:
     Returns:
         str: hash du mot de passe
     """
-    return pwd_context.hash(password)
+    prepared = _prepare_password(password)
+    
+    # Génération du sel et hachage
+    # bcrypt.hashpw attend des bytes et retourne des bytes
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(prepared, salt)
+
+    # On décode en latin-1 pour le stocker proprement en String dans SQLite
+    return hashed.decode('ascii')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Vérification d'un mot de passe par rapport à son hash
@@ -48,7 +68,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         bool: True si le mot de passe correspond au hash, False sinon
     """
     try:
-        return pwd_context.verify(plain_password, hashed_password)
+        prepared = _prepare_password(plain_password)
+        # On encode le hash de la base en ascii pour bcrypt
+        return bcrypt.checkpw(prepared, hashed_password.encode('ascii'))
     except Exception:
         return False
 

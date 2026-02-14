@@ -1,10 +1,11 @@
+from datetime import datetime
 import uuid
 from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from core import security
-from db.models import User
+from db.models import TokenBlacklist, User
 
 
 def create_user(
@@ -128,3 +129,40 @@ def activate_user(
         session.commit()
         session.refresh(user)
     return user
+
+def is_blacklisted_token(
+    session: Session,
+    jti: str
+) -> bool:
+    """Vérification si un token est blacklisé
+
+    Args:
+        session (Session): session d'accès à la base de données
+        jti (str): jti du token à vérifier
+
+    Returns:
+        bool: True si le token est blacklisé, False sinon
+    """
+    stmt = select(TokenBlacklist).where(TokenBlacklist.jti == jti)
+    blacklisted_token = session.execute(stmt)
+    return blacklisted_token.scalar_one_or_none() is not None
+
+def blacklist_token(
+    session: Session,
+    jti: str,
+    exp: int
+) -> None:
+    """Ajout d'un token à la blacklist pour l'invalider
+
+    Args:
+        session (Session): session d'accès à la base de données
+        jti (str): jti du token d'accès à invalider
+        exp (int): timestamp d'expiration du token
+    """
+    blacklisted_token = TokenBlacklist(
+        id=str(uuid.uuid4()),
+        jti=jti,
+        expires_at=datetime.fromtimestamp(exp)
+    )
+    session.add(blacklisted_token)
+    session.commit()

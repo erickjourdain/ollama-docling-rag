@@ -42,7 +42,6 @@ class CollectionMetadata(Base):
             ),
         )
 
-
 class DocumentMetadata(Base):
     """Modèle document pour gestion des métadonnées des documents"""
     __tablename__ = "documents_metadata"
@@ -70,3 +69,12 @@ class Job(Base):
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+
+class TokenBlacklist(Base):
+    """Modèle pour le stockage des tokens d'authentification invalidés (blacklist)"""
+    __tablename__ = "token_blacklist"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, index=True)
+    jti: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    blacklisted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

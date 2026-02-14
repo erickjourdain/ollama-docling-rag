@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from core.security import create_access_token, verify_password
@@ -54,6 +54,37 @@ async def login(
     # 3. Générer le token
     access_token = create_access_token(subject=user.id)
     return UserToken(access_token=access_token, token_type="bearer")
+
+@router_auth.post(
+    "/logout",
+    summary="Déconnexion de l'API",
+    description="Déconnexion de l'API en invalidant le token d'accès."
+)
+async def logout(
+    token: str = Depends(OAuth2PasswordBearer(tokenUrl="auth/login")), 
+    session: Session = Depends(get_db)
+) -> bool:
+    """Route de déconnexion de l'API
+
+    Args:
+        token (str, optional): token d'accès à invalider. Defaults to Depends(OAuth2PasswordBearer).
+        session (Session, optional): session d'accès à la base de données. Defaults to Depends(get_db).
+
+    Raises:
+        HTTPException: lève une exception HTTP 500 si une erreur survient lors de la déconnexion.
+
+    Returns:
+        _type_: un dictionnaire contenant le résultat de la déconnexion.
+    """
+    try:
+        UserService.blacklist_token(session=session, token=token)
+        return True
+    except Exception as e:
+        logger.error(f"Erreur lors de la déconnexion: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erreur lors de la déconnexion"
+        )
 
 @router_auth.post(
     "/create",

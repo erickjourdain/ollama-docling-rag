@@ -1,5 +1,6 @@
 from typing import Optional
 
+from jose import jwt
 from sqlalchemy.orm import Session
 
 from core.config import settings
@@ -134,3 +135,43 @@ class UserService:
             user_id=user_id
         )
         return db_user
+    
+    @staticmethod
+    def blacklist_token(
+        session: Session,
+        token: str
+    ) -> None:
+        """Ajouter un token à la blacklist pour l'invalider
+
+        Args:
+            session (Session): session d'accès à la base de données
+            token (str): token à blacklister
+        """
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        if jti is not None and exp is not None:
+             user_repository.blacklist_token(
+                session=session,
+                jti=jti,
+                exp=exp
+            )
+             
+    @staticmethod
+    def is_blacklisted_token(
+        session: Session,
+        jti: str
+    ) -> bool:
+        """Vérifier si un token est blacklister
+
+        Args:
+            session (Session): session d'accès à la base de données
+            jti (str): identifiant du token à vérifier
+
+        Returns:
+            bool: True si le token est blacklister, False sinon
+        """
+        return user_repository.is_blacklisted_token(
+            session=session,
+            jti=jti
+        )

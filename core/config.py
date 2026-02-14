@@ -8,8 +8,8 @@ load_dotenv()
 class Settings(BaseSettings):
     # Configuration sécurité et authentification
     SECRET_KEY: str = os.environ.get("SECRET_KEY", "une_clef_super_secrete")
-    ALGORITHM = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES = 60
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     # Nombre maximum de worker de l'application
     MAX_WORKER: int = int(os.environ.get("MAX_WORKER", 1))
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
 
     # Premier utilisateur
     FIRST_USER_USERNAME: str = os.environ.get("ADMIN_LOG", "admin")
-    FIRST_USER_PWD: str = os.environ.get("ADMON_PWD", "admin")
+    FIRST_USER_PWD: str = os.environ.get("ADMIN_PWD", "admin_2_RAG")
     FIRST_USER_EMAIL: str = os.environ.get("ADMIN_EMAIL", "test@test.com")
 
 settings = Settings()
