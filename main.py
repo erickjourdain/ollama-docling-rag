@@ -1,3 +1,4 @@
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import os
 
@@ -11,8 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.exceptions import RAGException
 from core.init import init_app
 from core.logging import logger
-from depencies.sqlite_session import SessionLocalSync
-from routers import router_collection, router_insert, router_query, router_system, router_job
+from core.utility import schedule_periodic_cleanup
+from db.database import sync_engine
+from dependencies.sqlite_session import SessionLocalSync
+from routers import router_collection, router_insert, router_query, router_system, router_job, router_auth
 from core.config import settings
 from services import UserService, DbVectorielleService
 
@@ -21,7 +24,9 @@ load_dotenv()
 # Lifespan de l'application
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Code d'initialisation de l'application
     init_app()
+    # Initialisation du service de base de données vectorielle
     app.state.vector_db_service = DbVectorielleService(
         chroma_db=settings.CHROMA_DB,
         embedding_model=settings.LLM_EMBEDDINGS_MODEL,
@@ -32,8 +37,21 @@ async def lifespan(app: FastAPI):
     # Création de l'administrateur au premier démarrage de l'application
     with SessionLocalSync() as session:
         UserService().create_first_admin(session=session)
+    # Lancement de la tâche de nettoyage périodique de la base de données
+    cleanup_task = asyncio.create_task(
+        schedule_periodic_cleanup(interval_seconds=86400, days_to_keep=7)
+    )
     yield
-    # Code de nettoyage si nécessaire
+    # Code de nettoyage à l'arrêt de l'application
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        logger.info("Tâche de nettoyage périodique annulée.")
+        pass
+    app.state.executor.shutdown(wait=True)
+    sync_engine.dispose()
+    logger.info("Application arrêtée.")
 
 # Paramètres de l'application
 app = FastAPI(
@@ -44,7 +62,8 @@ app = FastAPI(
 )
 
 # Configuration CORS
-origins= [os.environ.get("FRONTEND_URL", "")]
+origins= os.environ.get("ALLOWED_HOSTS", "").split(" ")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -54,14 +73,19 @@ app.add_middleware(
 )
 
 # Static files configuration
-app.mount(settings.STATIC_URL, StaticFiles(directory=settings.STATIC_DIR), name="data")
+app.mount(
+    settings.STATIC_URL, 
+    StaticFiles(directory=settings.STATIC_DIR), 
+    name="data"
+)
 
 # Insertion des routes
-app.include_router(router_query)
-app.include_router(router_collection)
-app.include_router(router_insert)
-app.include_router(router_job)
-app.include_router(router_system)
+app.include_router(router=router_auth)
+app.include_router(router=router_query)
+app.include_router(router=router_collection)
+app.include_router(router=router_insert)
+app.include_router(router=router_job)
+app.include_router(router=router_system)
 
 @app.exception_handler(RAGException)
 async def rag_exception_handler(request: Request, exc: RAGException):

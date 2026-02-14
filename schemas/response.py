@@ -10,3 +10,8 @@ class ProcessingResponse(BaseModel):
 class InsertResponse(BaseModel):
     """Réponse insertion d'un nouveau document"""
     job_id: str = Field(..., description="Identifiant du job d'insertion")
+
+class JobCleaningResponse(BaseModel):
+    """Réponse après nettoyage des anciens jobs"""
+    message: str = Field(..., description="Message de confirmation du nettoyage")
+    deleted: int = Field(..., description="Nombre de jobs supprimés")

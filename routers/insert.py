@@ -8,8 +8,10 @@ from core.exceptions import RAGException
 from core.utility import delete_file
 from core.config import settings
 from core.logging import logger
-from depencies.sqlite_session import get_db
-from depencies.worker import get_workers
+from db.models import User
+from dependencies.sqlite_session import get_db
+from dependencies.worker import get_workers
+from dependencies.role_checker import allow_admin
 from repositories import job_repository
 from schemas.collection import CollectionModel
 from schemas import InsertResponse
@@ -30,6 +32,7 @@ router_insert = APIRouter(prefix="/insert", tags=["Insertion fichier"])
 async def process_pdf(
     file: UploadFile = File(..., description="Fichier PDF à traiter"),
     collection_name: str = "",
+    user_admin: User = Depends(allow_admin),
     session: Session = Depends(get_db),
     executor: ThreadPoolExecutor = Depends(get_workers)
 ) -> InsertResponse:

@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from sqlalchemy import select
 from sqlalchemy.orm  import Session
 
@@ -42,3 +44,33 @@ def get_job(
     stmt = select(Job).where(Job.id == job_id)
     result = session.execute(stmt)
     return result.scalar_one_or_none()
+
+
+def cleanup_old_jobs(session: Session, days: int = 7) -> int:
+    """Suppression des vieux jobs
+
+    Args:
+        session (Session): session d'accès à la base de données
+        days (int, optional): nombre de jours au-delà duquel les jobs sont supprimés. Defaults to 7.
+
+    Returns:
+        int: nombre de jobs supprimés
+    """
+    # Calcul de la date limite
+    threshold_date = datetime.now() - timedelta(days=days)
+    
+    # 1. Identifier les IDs à supprimer
+    query = session.query(Job.id).filter(
+        Job.status.in_(["completed", "failed"]),
+        Job.created_at < threshold_date
+    )
+    job_ids = [r.id for r in query.all()]
+    
+    if not job_ids:
+        return 0
+
+    # 2. Supprimer
+    session.query(Job).filter(Job.id.in_(job_ids)).delete(synchronize_session=False)
+    session.commit()
+
+    return len(job_ids) # Retourne le nombre de lignes supprimées

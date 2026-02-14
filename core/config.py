@@ -6,6 +6,11 @@ from pydantic_settings import BaseSettings
 load_dotenv()
 
 class Settings(BaseSettings):
+    # Configuration sécurité et authentification
+    SECRET_KEY: str = os.environ.get("SECRET_KEY", "une_clef_super_secrete")
+    ALGORITHM = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
     # Nombre maximum de worker de l'application
     MAX_WORKER: int = int(os.environ.get("MAX_WORKER", 1))
 

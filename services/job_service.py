@@ -39,3 +39,8 @@ class JobService:
             current_logs = list(job.logs) # Copie de la liste
             current_logs.append(new_entry)
             job.logs = current_logs
+
+
+    @staticmethod    
+    def cleanup_old_jobs(session: Session, days: int = 7) -> int:
+        return job_repository.cleanup_old_jobs(session, days)

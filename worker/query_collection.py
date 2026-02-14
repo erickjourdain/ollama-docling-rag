@@ -7,7 +7,7 @@ from ollama import GenerateResponse
 from core.config import settings
 from core.logging import logger
 from core.exceptions import RAGException
-from depencies.sqlite_session import SessionLocalSync
+from dependencies.sqlite_session import SessionLocalSync
 from repositories.job_repository import get_job
 from services import DbVectorielleService, LlmService, JobService
 
@@ -43,7 +43,7 @@ def query_collection(
             JobService.add_job_log(session, job_id, "Démarrage du traitement de la requête")
     
             db_vector_service = DbVectorielleService(
-                chroma_db_dir=settings.chroma_db_dir,
+                chroma_db=settings.CHROMA_DB,
                 embedding_model=settings.LLM_EMBEDDINGS_MODEL,
                 ollama_url=settings.OLLAMA_URL
             )

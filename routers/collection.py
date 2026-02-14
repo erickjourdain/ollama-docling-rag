@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from core.config import settings
 from core.logging import logger
-from depencies.sqlite_session import get_db
-from depencies.vector_db import get_vector_db_service
+from db.models import User
+from dependencies.sqlite_session import get_db
+from dependencies.vector_db import get_vector_db_service
+from dependencies.role_checker import allow_admin, allow_any_user
 from services import CollectionService, DbVectorielleService
 from schemas import DocumentModel, CollectionCreate, CollectionModel
-from services.user_service import UserService
+
 
 router_collection = APIRouter(prefix="/collections", tags=["Collections"])
 
@@ -19,7 +20,8 @@ router_collection = APIRouter(prefix="/collections", tags=["Collections"])
 )
 def get_collections(
     limit: int = 50, 
-    offset: int = 0, 
+    offset: int = 0,
+    user: User = Depends(allow_any_user),
     session: Session = Depends(get_db)
  ) -> list[CollectionModel]:
     try:
@@ -47,18 +49,16 @@ def get_collections(
 async def create(
     payload: CollectionCreate,
     session: Session = Depends(get_db),
+    user_admin: User = Depends(allow_admin),
     vector_session: DbVectorielleService = Depends(get_vector_db_service)
 ) -> CollectionModel:
     try:
-        user = UserService().get_user_by_name(session=session, username=settings.FIRST_USER_USERNAME)
-        if user is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur non trouvé")
         CollectionService.create_collection(
             session=session, 
             vector_session=vector_session,
             name=payload.name,
             description=payload.description,
-            user_id=user.id
+            user_id=user_admin.id
         )
         collection = CollectionService.get_by_name(session=session, name=payload.name)
         return CollectionModel.model_validate(collection)
@@ -77,6 +77,7 @@ async def create(
 )
 async def get_collection(
     collection_name: str,
+    user: User = Depends(allow_any_user),
     session: Session = Depends(get_db)
     ) -> CollectionModel:
     try:
@@ -98,6 +99,7 @@ async def get_collection_documents(
     collection_name: str,
     limit: int = 50,
     offset: int = 0,
+    user: User = Depends(allow_any_user),
     session: Session = Depends(get_db)
 ) -> list[DocumentModel]:
     try:
@@ -125,6 +127,7 @@ async def get_collection_documents(
 )
 async def delete_collection(
     collection_name: str,
+    user_admin: User = Depends(allow_admin),
     session: Session = Depends(get_db),
     vector_session: DbVectorielleService = Depends(get_vector_db_service)
     ) -> bool:

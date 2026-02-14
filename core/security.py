@@ -1,41 +1,67 @@
+from datetime import datetime, timedelta
 import hashlib
 from io import BytesIO
 from pathlib import Path
-import bcrypt
+from typing import Any, Union
 from fastapi import HTTPException, UploadFile, status
 import filetype
+from jose import jwt
+from passlib.context import CryptContext
 from pypdf import PdfReader
 
-def _prepare_password(password: str) -> bytes:
-    """
-    Prépare le mot de passe en le hachant en SHA-256 pour 
-    contourner la limite des 72 octets de bcrypt.
-    """
-    return hashlib.sha256(password.encode("utf-8")).digest()
+from .config import settings
 
-def hash_password(password: str) -> str:
-    """Transformation du mot de passe en hash pour stockage"""
-    prepared = _prepare_password(password)
-    
-    # Génération du sel et hachage
-    # bcrypt.hashpw attend des bytes et retourne des bytes
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(prepared, salt)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-    # On décode en latin-1 pour le stocker proprement en String dans SQLite
-    return hashed.decode('ascii')
+def create_access_token(subject: Union[str, Any]) -> str:
+    """Création du jetond'accès à l'application
+
+    Args:
+        subject (Union[str, Any]): identifiant de l'utilisateur (généralement son ID ou son email)
+
+    Returns:
+        str: jeton d'accès encodé
+    """
+    expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode = {"exp": expire, "sub": str(subject)}
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+def get_password_hash(password: str) -> str:
+    """Retourne le hash d'un mot de passe
+
+    Args:
+        password (str): mot de passe en clair à hasher
+
+    Returns:
+        str: hash du mot de passe
+    """
+    return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Vérifie si le mot de passe clair correspond au hash en base."""
+    """Vérification d'un mot de passe par rapport à son hash
+
+    Args:
+        plain_password (str): mot de passe en clair à vérifier
+        hashed_password (str): hash du mot de passe à comparer
+
+    Returns:
+        bool: True si le mot de passe correspond au hash, False sinon
+    """
     try:
-        prepared = _prepare_password(plain_password)
-        # On encode le hash de la base en ascii pour bcrypt
-        return bcrypt.checkpw(prepared, hashed_password.encode('ascii'))
+        return pwd_context.verify(plain_password, hashed_password)
     except Exception:
         return False
 
 def hash_file(file_path: Path, chunk_size: int=4096):
-    """Hash d'un fichier"""
+    """Création du hash d'un fichier
+
+    Args:
+        file_path (Path): chemin du fichier à hasher
+        chunk_size (int, optional): taille des morceaux de lecture. Defaults to 4096.
+
+    Returns:
+        str: hash MD5 du fichier
+    """
     md5 = hashlib.md5()
     with open(file_path, 'rb') as f:
         while chunk := f.read(chunk_size):
@@ -43,7 +69,16 @@ def hash_file(file_path: Path, chunk_size: int=4096):
     return md5.hexdigest()
 
 def verify_md5(file_path: Path, expected_hash: str, chunk_size: int=4096):
-    """Vérifier le hash d'un fichier"""
+    """Vérification du hash d'un fichier par rapport à un hash attendu
+
+    Args:
+        file_path (Path): chemin du fichier à vérifier
+        expected_hash (str): hash MD5 attendu pour le fichier
+        chunk_size (int, optional): taille des morceaux de lecture. Defaults to 4096.
+
+    Returns:
+        bool: True si le hash du fichier correspond à expected_hash, False sinon
+    """
     calculated_hash = hash_file(file_path, chunk_size)
     # Case-insensitive comparison is often needed
     return calculated_hash.lower() == expected_hash.lower()

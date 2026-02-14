@@ -6,7 +6,7 @@ from core.security import hash_file
 from core.logging import logger
 from core.config import settings
 from db.models import DocumentMetadata
-from depencies.sqlite_session import SessionLocalSync
+from dependencies.sqlite_session import SessionLocalSync
 from repositories.collections_repository import CollectionRepository
 from repositories.job_repository import get_job
 from schemas import CollectionModel
