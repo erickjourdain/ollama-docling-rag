@@ -1,22 +1,21 @@
 from pathlib import Path
 import shutil
 import uuid
-from typing import Sequence
 from sqlalchemy.orm import Session
 
 from core.config import settings
+from schemas import CollectionFilters, CollectionListResponse, DocumentFilters, DocumentListResponse
 from services import DbVectorielleService
 from repositories.collections_repository import CollectionRepository
-from db.models import CollectionMetadata, DocumentMetadata
+from db.models import CollectionMetadata
 
 class CollectionService:
 
     @staticmethod
     def list_collections(
         session: Session,
-        limit: int = 50,
-        offset: int = 0
-    ) -> Sequence[CollectionMetadata]:
+        filters: CollectionFilters
+    ) -> CollectionListResponse:
         """Liste des collections paginée
 
         Args:
@@ -25,12 +24,11 @@ class CollectionService:
             offset (int, optional): offset. Defaults to 0.
 
         Returns:
-            Sequence[CollectionMetadata]: liste de collections
+            CollectionListResponse: liste de collections et leur nombre total
         """
         return CollectionRepository.list_collections(
             session=session,
-            limit=limit,
-            offset=offset
+            filters=filters
         )
     
     @staticmethod
@@ -107,20 +105,16 @@ class CollectionService:
     @staticmethod
     def documents_collection(
         session: Session,
-        collection_name: str,
-        limit: int = 50,
-        offset: int = 0
-    ) -> Sequence[DocumentMetadata]:
+        filters: DocumentFilters,
+    ) -> DocumentListResponse:
         # Vérifier existence collection
-        collection = CollectionRepository.get_by_name(session=session, name=collection_name)
+        collection = CollectionRepository.get_by_name(session=session, name=filters.collection_name)
         if not collection:
-            raise ValueError("Collection not found")
+            raise ValueError("Collection introuvable")
         # Récupérer la liste des documents de la collection
         return CollectionRepository.get_collection_documents(
             session=session, 
-            collecion_id=str(collection.id),
-            limit=limit,
-            offset=offset
+            filters=filters
         )
     
     @staticmethod
@@ -169,6 +163,33 @@ class CollectionService:
         except Exception as e:
             session.rollback()
             raise Exception(e)
+        
+    @staticmethod
+    def count_documents_collection(
+        session: Session,
+        collection_name: str
+    ) -> int:
+        """Récupérer le nombre de documents indexés dans une collection
+
+        Args:
+            session (AsyncSession): session sqlite
+            collection_name (str): nom de la collection
+
+        Raises:
+            ValueError: erreur levée si la collection n'existe pas
+
+        Returns:
+            int: nombre de documents indexés dans la collection
+        """
+        # Vérifier existence collection
+        collection = CollectionRepository.get_by_name(session=session, name=collection_name)
+        if not collection:
+            raise ValueError("Collection introuvable")
+        # Récupérer le nombre de documents indexés dans la collection
+        return CollectionRepository.count_documents_collection(
+            session=session, 
+            collection_id=str(collection.id)
+        )
 
     @staticmethod
     def check_db(session: Session) -> bool:

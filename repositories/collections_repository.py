@@ -1,35 +1,67 @@
-from typing import Sequence
 from sqlalchemy.orm import Session
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text, true
 
-from db.models import CollectionMetadata, DocumentMetadata
+from db.models import CollectionMetadata, DocumentMetadata, User
+from schemas import (
+    CollectionFilters, 
+    CollectionModel, 
+    CollectionListResponse, 
+    DocumentModel,
+    DocumentFilters, 
+    DocumentListResponse
+)
+
 
 class CollectionRepository:
     
     @staticmethod
     def list_collections(
         session: Session,
-        limit: int = 50,
-        offset: int = 0
-    ) -> Sequence[CollectionMetadata]:
+        filters: CollectionFilters
+    ) -> CollectionListResponse:
         """liste paginée des collections
 
         Args:
             session_session (Session): session sqlite
-            limit (int, optional): nombre max de collections retournées. Defaults to 50.
-            offset (int, optional): offset. Defaults to 0.
+            filters (CollectionFilters): filtres pour la récupération des collections (limit, offset, user, name)
 
         Returns:
-            Sequence[CollectionMetadata]: liste de collections
+            CollectionListResponse: liste de collections et leur nombre total
         """
+        # Filtrage par utilisateur
+        user_ids: list[str] = []
+        if filters.user:
+            stmt_users = (
+                select(User.id)
+                .where(User.username.ilike(f"%{filters.user}%"))
+            )
+            result_users = session.execute(stmt_users)
+            user_ids = [user_id for (user_id,) in result_users.fetchall()]
+            if len(user_ids) == 0:
+                return CollectionListResponse(collections=[], count=0)
+        # Création de la requête de base
         stmt = (
             select(CollectionMetadata)
             .order_by(CollectionMetadata.date_creation.desc())
-            .limit(limit)
-            .offset(offset)
+            .limit(filters.limit)
+            .offset(filters.offset)
         )
+        stmt_count = select(func.count(CollectionMetadata.id))
+        # Filtarge par utilisateur
+        if filters.user:
+            stmt = stmt.where(CollectionMetadata.created_by.in_(user_ids))
+            stmt_count = stmt_count.where(CollectionMetadata.created_by.in_(user_ids))
+        # Filtarge par nom de collection
+        if filters.name:
+            stmt = stmt.where(CollectionMetadata.name.ilike(f"%{filters.name}%"))
+            stmt_count = stmt_count.where(CollectionMetadata.name.ilike(f"%{filters.name}%"))
+        # Exécution des requêtes
         result = session.execute(stmt)
-        return result.scalars().all()
+        result_count = session.execute(stmt_count).scalar_one()
+        return CollectionListResponse(
+            collections=[CollectionModel.model_validate(c) for c in result.scalars().all()],
+            count=result_count
+        )
     
     @staticmethod
     def get_by_name(
@@ -93,22 +125,71 @@ class CollectionRepository:
         return result.scalar_one_or_none()
     
     @staticmethod
+    def count_documents_collection(
+        session: Session,
+        collection_id: str
+    ) -> int:
+        """Nombre de documents indexés dans une collection
+
+        Args:
+            session (Session): session d'accès à la base de données
+            collection_id (str): id de la collection
+
+        Returns:
+            int: nombre de documents indexés dans la collection
+        """
+        stmt = (
+            select(func.count(DocumentMetadata.id))
+            .where(
+                (DocumentMetadata.collection_id == collection_id) & 
+                (DocumentMetadata.is_indexed == true())
+            )
+        )
+        result = session.execute(stmt)
+        return result.scalar_one()
+    
+    @staticmethod
     def get_collection_documents(
         session: Session,
-        collecion_id: str,
-        limit: int = 50,
-        offset: int = 0
-    ) -> Sequence[DocumentMetadata]:
+        filters: DocumentFilters
+    ) -> DocumentListResponse:
+        """Liste des documents présents dans une collection
+
+        Args:
+            session (Session): sessions d'accès à la base de données
+            filters (DocumentFilters): filtres pour la récupération des documents (collection_name, limit, offset)
+
+        Raises:
+            ValueError: si la collection n'existe pas
+
+        Returns:
+            DocumentListResponse: liste des documents de la collection et leur nombre total
+        """
+        collection = CollectionRepository.get_by_name(session=session, name=filters.collection_name)
+        if not collection:
+            raise ValueError("Collection introuvable")
         stmt = (
             select(DocumentMetadata)
             .where(
-                (DocumentMetadata.collection_id == collecion_id)
+                (DocumentMetadata.collection_id == collection.id) & 
+                (DocumentMetadata.is_indexed == true())
             )
-            .limit(limit=limit)
-            .offset(offset=offset)
+            .limit(limit=filters.limit)
+            .offset(offset=filters.offset)
+        )
+        stmt_count = (
+            select(func.count(DocumentMetadata.id))
+            .where(
+                (DocumentMetadata.collection_id == collection.id) & 
+                (DocumentMetadata.is_indexed == true())
+            )
         )
         result = session.execute(stmt)
-        return result.scalars().all()
+        result_count = session.execute(stmt_count).scalar_one()
+        return DocumentListResponse(
+            documents=[DocumentModel.model_validate(d) for d in result.scalars().all()],
+            count=result_count
+        )
 
     @staticmethod
     def delete_documents(
