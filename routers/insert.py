@@ -58,7 +58,7 @@ async def process_pdf(
         # 2. Sauvegarde du fichier
         job_id = str(uuid.uuid4())
         doc_id = uuid.uuid4()
-        file_path = await ConversionService.save_pdf(
+        file_path = await ConversionService.save_imported_file(
             file=file, 
             collection_name=collection_name, 
             filename=f"{doc_id}.pdf"

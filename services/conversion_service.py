@@ -5,6 +5,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from docling_core.types.doc.base import ImageRefMode
+from docling_core.types.doc.document import DoclingDocument
 
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
 from docling.datamodel.base_models import InputFormat
@@ -14,6 +15,7 @@ from docling.datamodel.pipeline_options import (
     TableFormerMode
 )
 from docling.document_converter import DocumentConverter, PdfFormatOption
+
 
 from core.config import settings
 from core.exceptions import DocumentParsingError, RAGException
@@ -25,7 +27,7 @@ class ConversionService:
     """Service pour gérer l'envoi des fichiers pdf"""
     
     @staticmethod
-    async def save_pdf(
+    async def save_imported_file(
         file: UploadFile,
         collection_name: str,
         filename: str
@@ -85,9 +87,38 @@ class ConversionService:
             return document is not None
         except Exception as e:
             raise ValueError(e)
+        
+    @staticmethod
+    def save_converted_markdown(
+        convert_doc: DoclingDocument,
+        collection_name: str,
+        doc_id: str
+    ) -> Path:
+            
+        try:
+            # Gestion des répertoires de stockage
+            md_dir = Path(settings.STATIC_DIR) / collection_name
+            md_dir.mkdir(exist_ok=True)
+            md_filename = md_dir / f"{doc_id}.md"
+            
+            images_dir = md_dir / "images" / doc_id
+            if images_dir.exists():
+                shutil.rmtree(images_dir)
+
+            # Sauvegarde du fichier Markdown
+            convert_doc.save_as_markdown(
+                filename=md_filename,
+                artifacts_dir=Path("images") / doc_id, 
+                image_mode=ImageRefMode.REFERENCED
+            )
+
+            return md_filename
+
+        except Exception as e:
+            raise ValueError(e)
 
     @staticmethod
-    def convert_pdf_to_md(file_path: Path | str, collection_name: str) -> ConvertPdfResponse:
+    def convert_pdf_to_md(file_path: Path | str, collection_name: str, doc_id: str) -> ConvertPdfResponse:
         """_summary_
 
         Args:
@@ -130,30 +161,15 @@ class ConversionService:
             
             except Exception as e:
                 raise DocumentParsingError("Erreur docling", str(e))
-
-            # Gestion des répertoires de stockage
-            md_dir = Path(settings.STATIC_DIR) / collection_name
-            md_dir.mkdir(exist_ok=True)
-            doc_uuid = convert_doc.input.file.stem
-            md_filename = md_dir / f"{doc_uuid}.md"
             
-            # Suppression des fichiers existants
-            if md_filename.exists():
-                md_filename.unlink()
-            
-            images_dir = md_dir / "images" / doc_uuid
-            if images_dir.exists():
-                shutil.rmtree(images_dir)
+            md_filename = ConversionService.save_converted_markdown(
+                convert_doc=convert_doc.document,
+                collection_name=collection_name,
+                doc_id=doc_id
+            )
 
             # Calcul du temps écoulé
             elapsed_time = time.time() - start_time
-
-            # Sauvegarde du fichier Markdown
-            convert_doc.document.save_as_markdown(
-                filename=md_filename,
-                artifacts_dir=Path("images") / doc_uuid, 
-                image_mode=ImageRefMode.REFERENCED
-            )
 
             # Retour de la réponse
             return ConvertPdfResponse(

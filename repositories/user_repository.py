@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from core import security
+from core.config import settings
 from db.models import TokenBlacklist, User
 
 
@@ -166,3 +167,24 @@ def blacklist_token(
     )
     session.add(blacklisted_token)
     session.commit()
+
+def cleanup_blacklisted_tokens(
+    session: Session
+) -> int:
+    """Nettoyage des tokens blacklistés expirés
+
+    Args:
+        session (Session): session d'accès à la base de données
+
+    Returns:
+        int: nombre de tokens supprimés
+    """
+    stmt = select(TokenBlacklist).where(
+        TokenBlacklist.blacklisted_at < datetime.now()+timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    expired_tokens = session.execute(stmt).scalars().all()
+    count = len(expired_tokens)
+    for token in expired_tokens:
+        session.delete(token)
+    session.commit()
+    return count

@@ -62,7 +62,8 @@ def insert_pdf(
 
             conversion_result = ConversionService.convert_pdf_to_md(
                 file_path=file_path, 
-                collection_name=collection.name
+                collection_name=collection.name,
+                doc_id=doc_id
             )
 
             # Enregistrement des informations liées au document inséré

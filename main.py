@@ -17,6 +17,7 @@ from db.database import sync_engine
 from dependencies.sqlite_session import SessionLocalSync
 from routers import router_collection, router_insert, router_query, router_system, router_job, router_auth
 from core.config import settings
+from repositories.job_repository import cleanup_old_jobs
 from services import UserService, DbVectorielleService
 
 load_dotenv()
@@ -35,8 +36,10 @@ async def lifespan(app: FastAPI):
     # Définition du nombre de workers disponibles pour l'application
     app.state.executor = ThreadPoolExecutor(max_workers=settings.MAX_WORKER)
     # Création de l'administrateur au premier démarrage de l'application
+    # Nettoyage des anciens jobs à chaque démarrage de l'application
     with SessionLocalSync() as session:
         UserService().create_first_admin(session=session)
+        cleanup_old_jobs(session=session, days=7)
     # Lancement de la tâche de nettoyage périodique de la base de données
     cleanup_task = asyncio.create_task(
         schedule_periodic_cleanup(interval_seconds=86400, days_to_keep=7)
