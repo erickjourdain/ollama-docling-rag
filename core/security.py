@@ -106,15 +106,16 @@ def verify_md5(file_path: Path, expected_hash: str, chunk_size: int=4096):
     return calculated_hash.lower() == expected_hash.lower()
 
 
-async def validate_pdf(file: UploadFile):
-    """Validation stricte d'un fichier PDF uploadé pour éviter les risques de sécurité liés à des fichiers malveillants.
+async def validate_file_type(file: UploadFile):
+    """Validation stricte du fichier uploadé pour éviter les risques de sécurité liés 
+    à des fichiers malveillants.
 
     Args:
         file (UploadFile): Le fichier uploadé à valider.
 
     Raises:
         HTTPException: Aucun fichier sélectionné.
-        HTTPException: Seuls les fichiers PDF sont acceptés.
+        HTTPException: Seuls les fichiers PDF et DOCX sont acceptés.
         HTTPException: Impossible de déterminer le type de fichier.
         HTTPException: Fichier invalide.
         HTTPException: PDF protégé par mot de passe.
@@ -128,10 +129,10 @@ async def validate_pdf(file: UploadFile):
         )
 
     # 2. Vérification par extension (premier rempart)
-    if not file.filename.lower().endswith(".pdf"):
+    if not file.filename.lower().endswith((".pdf", ".docx")):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Seuls les fichiers PDF sont acceptés."
+            detail="Seuls les fichiers PDF et DOCX sont acceptés."
         )
 
     # 3. Vérification du contenu réel (Magic Numbers)
@@ -147,27 +148,28 @@ async def validate_pdf(file: UploadFile):
             detail="Impossible de déterminer le type de fichier."
         )
     
-    if kind.mime != "application/pdf":
+    if kind.mime not in ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Fichier invalide. Type détecté : {kind.mime} au lieu de application/pdf."
+            detail=f"Fichier invalide, seuls les formats PDF et DOCX sont acceptés. Type détecté : {kind.mime}"
         )
 
     # 4. Vérification du Mot de Passe (Chiffrement)
     # On lit le fichier en mémoire pour pypdf (seulement les métadonnées)
-    content = await file.read()
-    await file.seek(0) # Toujours remettre au début !
-    
-    try:
-        reader = PdfReader(BytesIO(content))
-        if reader.is_encrypted:
+    if kind.mime == "application/pdf":
+        content = await file.read()
+        await file.seek(0) # Toujours remettre au début !
+        
+        try:
+            reader = PdfReader(BytesIO(content))
+            if reader.is_encrypted:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Ce PDF est protégé par un mot de passe et ne peut pas être traité."
+                )
+        except Exception:
+            # Si pypdf n'arrive même pas à lire la structure, le PDF est corrompu
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ce PDF est protégé par un mot de passe et ne peut pas être traité."
+                detail="Le fichier PDF semble corrompu ou illisible."
             )
-    except Exception:
-        # Si pypdf n'arrive même pas à lire la structure, le PDF est corrompu
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le fichier PDF semble corrompu ou illisible."
-        )

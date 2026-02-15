@@ -13,7 +13,7 @@ from schemas import CollectionModel
 from services import ChunkingService, ConversionService, DbVectorielleService, JobService
 
 
-def insert_pdf(
+def insert_doc(
     file_path: Path,
     filename: str,
     doc_id: str,
@@ -21,7 +21,7 @@ def insert_pdf(
     job_id: str,
     user_id: str,
 ):
-    """Insertion d'un fichier pdf dans la base de connaissance
+    """Insertion d'un fichier dans la base de connaissance
 
     Args:
         file_path (Path): chemin vers le fichier à insérer
@@ -55,12 +55,12 @@ def insert_pdf(
                 ollama_url=settings.OLLAMA_URL
             )
 
-            # Conversion du fichier pdf
+            # Conversion du fichier en markdown
             job.progress = "file conversion"
             JobService.add_job_log(session, job_id, "Lancement conversion en markdown")   
             session.commit()
 
-            conversion_result = ConversionService.convert_pdf_to_md(
+            conversion_result = ConversionService.convert_to_md(
                 file_path=file_path, 
                 collection_name=collection.name,
                 doc_id=doc_id

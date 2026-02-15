@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # Static files
     STATIC_URL: str= "/data"
     STATIC_DIR: Path = Path("data/files")
-    image_resolution_scale: float = 2.0
+    IMAGE_RESOLUTION_SCALE: float = 2.0
 
     # Sqlite Database
     SQLITE_DB: str = "./data/rag_db.sqlite" # chemin de la base

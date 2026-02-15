@@ -10,11 +10,12 @@ from docling_core.types.doc.document import DoclingDocument
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import (
+    PaginatedPipelineOptions,
     PdfPipelineOptions,
     TableStructureOptions,
     TableFormerMode
 )
-from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.document_converter import DocumentConverter, PdfFormatOption, WordFormatOption
 
 
 from core.config import settings
@@ -30,7 +31,7 @@ class ConversionService:
     async def save_imported_file(
         file: UploadFile,
         collection_name: str,
-        filename: str
+        doc_id: str
     ) -> Path:
         """Sauvegarde du fichier pdf
 
@@ -50,6 +51,9 @@ class ConversionService:
             md_dir.mkdir(exist_ok=True)
 
             # Enregistrement du fichier
+            if file.filename is None or not file.filename.lower().endswith((".pdf", ".docx")):
+                raise ValueError("Format de fichier non supporté. Seuls les fichiers PDF et DOCX sont autorisés.")
+            filename = f"{doc_id}.{file.filename.split('.')[-1]}"
             path = md_dir / filename
             pdf_bytes = await file.read()
             with open(path, "wb") as f:
@@ -118,11 +122,11 @@ class ConversionService:
             raise ValueError(e)
 
     @staticmethod
-    def convert_pdf_to_md(file_path: Path | str, collection_name: str, doc_id: str) -> ConvertPdfResponse:
+    def convert_to_md(file_path: Path | str, collection_name: str, doc_id: str) -> ConvertPdfResponse:
         """_summary_
 
         Args:
-            file_path (Path | str): chemin vers le fichier pdf à traiter
+            file_path (Path | str): chemin vers le fichier à traiter
             collection_name (str): nom de la collection / table pour le stockage des données
 
         Raises:
@@ -138,23 +142,33 @@ class ConversionService:
         try: 
             try: 
                 # Configuration des options de conversion PDF
-                pipeline_options = PdfPipelineOptions()
-                pipeline_options.do_ocr = False
-                pipeline_options.images_scale = settings.image_resolution_scale
-                pipeline_options.generate_picture_images = True
-                pipeline_options.do_table_structure = True
-                pipeline_options.table_structure_options = TableStructureOptions(
+                pdf_pipeline_options = PdfPipelineOptions()
+                pdf_pipeline_options.do_ocr = False
+                pdf_pipeline_options.images_scale = settings.IMAGE_RESOLUTION_SCALE
+                pdf_pipeline_options.generate_picture_images = True
+                pdf_pipeline_options.do_table_structure = True
+                pdf_pipeline_options.table_structure_options = TableStructureOptions(
                     mode = TableFormerMode.ACCURATE
                 )
-                pipeline_options.accelerator_options = AcceleratorOptions(
+                pdf_pipeline_options.accelerator_options = AcceleratorOptions(
+                    num_threads=4, device=AcceleratorDevice.AUTO
+                )
+
+                # Configuration des options de conversion DOCX
+                docx_pipepline_options = PaginatedPipelineOptions()
+                docx_pipepline_options.images_scale = settings.IMAGE_RESOLUTION_SCALE
+                docx_pipepline_options.generate_picture_images = True
+                docx_pipepline_options.accelerator_options = AcceleratorOptions(
                     num_threads=4, device=AcceleratorDevice.AUTO
                 )
 
                 # Conversion du document
                 start_time = time.time()
                 doc_converter = DocumentConverter(
+                    allowed_formats=[InputFormat.PDF, InputFormat.DOCX],
                     format_options={
-                        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                        InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_pipeline_options),
+                        InputFormat.DOCX: WordFormatOption(pipeline_options=docx_pipepline_options)
                     }
                 )
                 convert_doc = doc_converter.convert(file_path)

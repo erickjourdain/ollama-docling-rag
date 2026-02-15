@@ -6,7 +6,6 @@ import uuid
 from core import security
 from core.exceptions import RAGException
 from core.utility import delete_file
-from core.config import settings
 from core.logging import logger
 from db.models import User
 from dependencies.sqlite_session import get_db
@@ -16,28 +15,28 @@ from repositories import job_repository
 from schemas.collection import CollectionModel
 from schemas import InsertResponse
 from services import ConversionService, CollectionService
-from services.user_service import UserService
-from worker.insert_pdf import insert_pdf
+from worker.insert_doc import insert_doc
 
 router_insert = APIRouter(prefix="/insert", tags=["Insertion fichier"])
 
 @router_insert.post(
     "/pdf",
     response_model=InsertResponse,
-    summary="Lancer le traitement d'un PDF pour stockage dans la base de connaissances",
+    summary="Lancer le traitement d'un document pour stockage dans la base de connaissances",
     description="""
-    Insertion d'un fichier PDF complet et stockage dans une collection / table.
+    Conversion d'un document en markdown via Docling, stockage du fichier converti sur le serveur,
+    chunk du document et stockage dans la base de données vectorielle.
     """
 )
-async def process_pdf(
-    file: UploadFile = File(..., description="Fichier PDF à traiter"),
+async def process_file(
+    file: UploadFile = File(..., description="Fichier à traiter"),
     collection_name: str = "",
     user_admin: User = Depends(allow_admin),
     session: Session = Depends(get_db),
     executor: ThreadPoolExecutor = Depends(get_workers)
 ) -> InsertResponse:
     """
-    Mise en attente d'un fichier PDF dans la file d'attente de traitement 
+    Mise en attente d'un fichier dans la file d'attente de traitement 
     pour intégration dans la base de connaissances
     """
     try:
@@ -53,7 +52,7 @@ async def process_pdf(
             )
         collection = CollectionModel.model_validate(collection)
 
-        await security.validate_pdf(file=file)
+        await security.validate_file_type(file=file)
 
         # 2. Sauvegarde du fichier
         job_id = str(uuid.uuid4())
@@ -61,7 +60,7 @@ async def process_pdf(
         file_path = await ConversionService.save_imported_file(
             file=file, 
             collection_name=collection_name, 
-            filename=f"{doc_id}.pdf"
+            doc_id=str(doc_id)
         )
 
         # 3. Vérification de la présence du fichier dans la collection
@@ -76,19 +75,8 @@ async def process_pdf(
                 status_code=status.HTTP_400_BAD_REQUEST, 
                 detail="Le fichier est déjà présent dans la collection"
             )
-
-        # 4. Récupération de l'utilisateur
-        user = UserService.get_user_by_name(
-            session=session, 
-            username=settings.FIRST_USER_USERNAME
-        )
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="L'utilisateur n'existe pas"
-            )
         
-        # 5. Création du job dans la base de données
+        # 4. Création du job dans la base de données
         job_repository.create_job(
             session=session, 
             job_id=job_id, 
@@ -96,19 +84,19 @@ async def process_pdf(
                 'filename': file.filename,
                 'doc_id': str(doc_id),
                 'collection': collection.name,
-                'user': user.username
+                'user': user_admin.username
             },
             type="insertion"
         )
         
-        # 6. Mise en attente du document dans la pile de traitement
-        executor.submit(insert_pdf,
+        # 5. Mise en attente du document dans la pile de traitement
+        executor.submit(insert_doc,
             file_path=file_path,
             filename=file.filename or 'unknown',
             doc_id=str(doc_id),
             collection=collection,
             job_id=job_id,
-            user_id=user.id
+            user_id=user_admin.id
         )
 
         return InsertResponse(job_id=job_id)
