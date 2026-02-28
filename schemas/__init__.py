@@ -4,13 +4,18 @@ from .schema import (
 )
 from .collection import (CollectionModel, CollectionCreate)
 from .document import (DocumentModel, DocumentCreate)
-from .user import (UserOut, UserCreate)
+from .user import (UserOut, UserCreate, UserUpdate)
 from .job import JobOut
 from .chunk import (ChunkMetada, Chunk, ChunkingResponse)
 from .health import (OllamaHealth, HealthResponse)
-from .response import InsertResponse, CollectionListResponse, DocumentListResponse
+from .response import (
+    InsertResponse, 
+    CollectionListResponse, 
+    DocumentListResponse,
+    UsersListResponse
+)
 from .conversion import ConvertPdfResponse
-from .filters import CollectionFilters, DocumentFilters
+from .filters import CollectionFilters, DocumentFilters, UserFilters
 
 __all__ = [
     "InsertResponse",
@@ -18,6 +23,7 @@ __all__ = [
     "Model",
     "UserOut",
     "UserCreate",
+    "UserUpdate",
     "CollectionModel",
     "CollectionCreate",
     "DocumentModel",
@@ -32,5 +38,7 @@ __all__ = [
     "CollectionFilters",
     "CollectionListResponse",
     "DocumentFilters",
-    "DocumentListResponse"
+    "DocumentListResponse",
+    "UserFilters",
+    "UsersListResponse"
 ]

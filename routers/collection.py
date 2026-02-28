@@ -110,7 +110,7 @@ async def create(
         return CollectionModel.model_validate(collection)
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    except HTTPException as e:
+    except Exception as e:
         logger.error(f"Crash inattendu lors de la création de la collection : {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 

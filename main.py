@@ -15,7 +15,15 @@ from core.logging import logger
 from core.utility import schedule_periodic_cleanup
 from db.database import sync_engine
 from dependencies.sqlite_session import SessionLocalSync
-from routers import router_collection, router_insert, router_query, router_system, router_job, router_auth
+from routers import (
+    router_collection, 
+    router_insert, 
+    router_query, 
+    router_system, 
+    router_job, 
+    router_auth,
+    router_user
+)
 from core.config import settings
 from repositories.job_repository import cleanup_old_jobs
 from services import UserService, DbVectorielleService
@@ -66,7 +74,6 @@ app = FastAPI(
 
 # Configuration CORS
 origins= os.environ.get("ALLOWED_HOSTS", "").split(" ")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -84,6 +91,7 @@ app.mount(
 
 # Insertion des routes
 app.include_router(router=router_auth)
+app.include_router(router=router_user)
 app.include_router(router=router_query)
 app.include_router(router=router_collection)
 app.include_router(router=router_insert)

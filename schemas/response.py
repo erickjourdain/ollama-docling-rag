@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+from .user import UserOut
 from .document import DocumentModel
 from .collection import CollectionModel
 
@@ -21,10 +22,15 @@ class JobCleaningResponse(BaseModel):
 
 class CollectionListResponse(BaseModel):
     """Réponse pour la liste des collections"""
-    collections: list[CollectionModel] = Field(..., description="Liste des collections")
+    data: list[CollectionModel] = Field(..., description="Liste des collections")
     count: int = Field(..., description="Nombre total de collections")
 
 class DocumentListResponse(BaseModel):
     """Réponse pour la liste des documents d'une collection"""
-    documents: list[DocumentModel] = Field(..., description="Liste des documents de la collection")
+    data: list[DocumentModel] = Field(..., description="Liste des documents de la collection")
     count: int = Field(..., description="Nombre total de documents dans la collection")
+
+class UsersListResponse(BaseModel):
+    """Réponse pour la liste des utilisateurs"""
+    data: list[UserOut] = Field(..., description="Liste des utilisateurs")
+    count: int = Field(..., description="Nombre total d'utilisateurs")

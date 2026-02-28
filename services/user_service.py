@@ -4,9 +4,10 @@ from jose import jwt
 from sqlalchemy.orm import Session
 
 from core.config import settings
+from core.exceptions import RAGException
 from db.models import User
 from repositories import user_repository
-from schemas import UserCreate
+from schemas import UserCreate, UserFilters, UsersListResponse, UserUpdate
 
 
 class UserService:
@@ -26,6 +27,25 @@ class UserService:
             User | None: utilisateur
         """
         return user_repository.get_user(session=session, user_id=user_id)
+    
+    @staticmethod
+    def list_users(
+        session: Session,
+        filters: UserFilters
+    ) -> UsersListResponse:
+        """Récupération de la liste des utilisateurs
+
+        Args:
+            session (Session): session d'accès à la base de données
+            filters (UserFilters): filtres de recherche des utilisateurs
+
+        Returns:
+            UsersListResponse: liste des utilisateurs et leur nombre total
+        """
+        return user_repository.list_users(
+            session=session,
+            filters=filters
+        )
 
     @staticmethod
     def create_user(
@@ -33,6 +53,16 @@ class UserService:
         user: UserCreate,
         is_active: Optional[bool] = True
     ) -> User | None:
+        """Création d'un utilisateur
+
+        Args:
+            session (Session): session d'accès à la base de données
+            user (UserCreate): données pour la création de l'utilisateur
+            is_active (Optional[bool], optional): activiation du compte. Defaults to True.
+
+        Returns:
+            User | None: utilisateur nouvellement créé
+        """
         db_user = user_repository.create_user(
             session=session,
             username=user.username,
@@ -136,6 +166,49 @@ class UserService:
         )
         return db_user
     
+    @staticmethod
+    def update_user(
+        session: Session,
+        user_id: str,
+        user: UserUpdate,
+        current_user: User
+    ) -> User | None:
+        """Mise à jour des données d'un utilisateur
+
+        Args:
+            session (Session): session d'accès à la base de données
+            user (UserUpdate): données de l'utilisateur à mettre à jour
+
+        Returns:
+            User | None: utilisateur mis à jour
+        """
+        if current_user.role != "ADMIN":
+            if current_user.id != user_id:
+                raise RAGException(
+                    message="Opération interdite",
+                    detail="Vous ne disposez pas des droits pour modifier un utilisateur"
+                )
+            if user.role is not None:
+                raise RAGException(
+                    message="Opération interdite",
+                    detail="Vous ne disposez pas des droits pour modifier le rôle d'un utilisateur"
+                )
+            if user.is_activate is not None:
+                raise RAGException(
+                    message="Opération interdite",
+                    detail="Vous ne disposez pas des droits pour modifier le statut d'un utilisateur"
+                )
+        if (user.password is not None and user.old_password is None):
+            raise RAGException(
+                message="Mot de passe manquant",
+                detail="L'ancien mot de passe est nécessaire pour changer le mot de passe"
+            )
+        return user_repository.update_user(
+            session=session,
+            user=user,
+            user_id=user_id
+        )
+
     @staticmethod
     def blacklist_token(
         session: Session,

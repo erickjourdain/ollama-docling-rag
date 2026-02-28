@@ -38,7 +38,7 @@ class CollectionRepository:
             result_users = session.execute(stmt_users)
             user_ids = [user_id for (user_id,) in result_users.fetchall()]
             if len(user_ids) == 0:
-                return CollectionListResponse(collections=[], count=0)
+                return CollectionListResponse(data=[], count=0)
         # Création de la requête de base
         stmt = (
             select(CollectionMetadata)
@@ -59,7 +59,7 @@ class CollectionRepository:
         result = session.execute(stmt)
         result_count = session.execute(stmt_count).scalar_one()
         return CollectionListResponse(
-            collections=[CollectionModel.model_validate(c) for c in result.scalars().all()],
+            data=[CollectionModel.model_validate(c) for c in result.scalars().all()],
             count=result_count
         )
     
@@ -187,7 +187,7 @@ class CollectionRepository:
         result = session.execute(stmt)
         result_count = session.execute(stmt_count).scalar_one()
         return DocumentListResponse(
-            documents=[DocumentModel.model_validate(d) for d in result.scalars().all()],
+            data=[DocumentModel.model_validate(d) for d in result.scalars().all()],
             count=result_count
         )
 

@@ -17,12 +17,66 @@ class UserCreate(BaseModel):
         min_length=8,
         max_length=128,
     )
-    password: str =Field(..., description="Mot de passe de l'utilisateur")
+    password: str = Field(..., description="Mot de passe de l'utilisateur")
     role: Optional[str] = Field(..., description="Role de l'utilisateur")
     
     @field_validator('password')
     @classmethod
     def password_complexity(cls, v: str) -> str:
+        # 1. Au moins une majuscule
+        if not re.search(r'[A-Z]', v):
+            raise ValueError("Le mot de passe doit contenir au moins une majuscule.")
+        
+        # 2. Au moins une minuscule
+        if not re.search(r'[a-z]', v):
+            raise ValueError("Le mot de passe doit contenir au moins une minuscule.")
+        
+        # 3. Au moins un chiffre
+        if not re.search(r'\d', v):
+            raise ValueError("Le mot de passe doit contenir au moins un chiffre.")
+        
+        # 4. Au moins un caractère spécial
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError("Le mot de passe doit contenir au moins un caractère spécial.")
+            
+        return v
+    
+class UserUpdate(BaseModel):
+    """Modèle utilisateur pour la mise à jour de la base de données"""
+    username: Optional[str] = Field(
+        None, 
+        description="Nom d'utilisateur",
+        min_length=3,
+        max_length=50)
+    email: Optional[str] = Field(
+        None, 
+        description="Adresse e-mail de l'utilisateur",
+        min_length=8,
+        max_length=128,
+    )
+    old_password: Optional[str] = Field(
+        None, 
+        description="Ancien mot de passe de l'utilisateur"
+    )
+    password: Optional[str] = Field(
+        None, 
+        description="Mot de passe de l'utilisateur"
+    )
+    role: Optional[str] = Field(
+        None,
+        description="Role assigné à l'utilisateur"
+    )
+    is_activate: Optional[bool] = Field(
+        None,
+        description="Statut du compte de l'utilisateur"
+    )
+
+    @field_validator('password')
+    @classmethod
+    def password_complexity(cls, v: str | None) -> str | None:
+        # 0. Mot de passe non fourni
+        if v is None:
+            return None
         # 1. Au moins une majuscule
         if not re.search(r'[A-Z]', v):
             raise ValueError("Le mot de passe doit contenir au moins une majuscule.")

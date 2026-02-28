@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta
 import uuid
 from typing import Optional
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from core import security
 from core.config import settings
 from db.models import TokenBlacklist, User
+from schemas import UserFilters, UsersListResponse, UserOut
+from schemas.user import UserUpdate
 
 
 def create_user(
@@ -44,6 +46,45 @@ def create_user(
     session.commit()
     session.refresh(db_user)
     return db_user
+
+def list_users(
+    session: Session,
+    filters: UserFilters
+) -> UsersListResponse:
+    """Récupération de la liste des utilisateurs
+
+    Args:
+        session (Session): session d'accès à la base de données
+        filters (UserFilters): filtres de recherche des utilisateurs
+
+    Returns:
+        UsersListResponse: liste des utilisateurs et leur nombre total
+    """
+    stmt = (
+        select(User)
+        .order_by(User.id)
+        .limit(filters.limit)
+        .offset(filters.offset)
+    )
+    stmt_count = select(func.count(User.id))
+    if filters.search:
+        stmt.where(or_(
+            User.username.ilike(f"%{filters.search}%"),
+            User.email.ilike(f"%{filters.search}%")
+        ))
+        stmt_count.where(or_(
+            User.username.ilike(f"%{filters.search}%"),
+            User.email.ilike(f"%{filters.search}%")
+        ))
+    if filters.is_active:
+        stmt.where(User.is_active == filters.is_active)
+        stmt_count.where(User.is_active == filters.is_active)
+    result = session.execute(stmt)
+    result_count = session.execute(stmt_count).scalar_one()
+    return UsersListResponse(
+        data=[UserOut.model_validate(u) for u in result.scalars().all()],
+        count=result_count
+    )
 
 def get_user(
     session: Session,
@@ -130,6 +171,42 @@ def activate_user(
         session.commit()
         session.refresh(user)
     return user
+
+def update_user(
+    session: Session,
+    user: UserUpdate,
+    user_id: str
+) -> User | None:
+    """Mise à jour des données d'un utilisateur dans la base de données
+
+    Args:
+        session (Session): sessions d'accès à la base de données
+        user (UserUpdate): données de l'utilisateur
+        user_id (str): identifiant de l'utilisateur
+
+    Returns:
+        User | None: utilisateur mis à jour
+    """
+    updated_user = get_user(session=session, user_id=user_id)
+    if updated_user is not None:
+        updated_user.username = (user.username) if user.username is not None else updated_user.username
+        updated_user.role = (user.role) if user.role is not None else updated_user.role
+        updated_user.email = (user.email) if user.email is not None else updated_user.email
+        updated_user.username = (user.username) if user.username is not None else updated_user.username
+        updated_user.is_active = (user.is_activate) if user.is_activate is not None else updated_user.is_active
+        if user.password and user.old_password:
+            if security.verify_password(
+                plain_password=user.old_password, 
+                hashed_password=updated_user.hashed_password
+            ):
+                updated_user.hashed_password=security.get_password_hash(
+                    password=user.password
+                )
+            else:
+                raise Exception("Mot de passe incorrect")
+        session.commit()
+        session.refresh(update_user)
+    return updated_user
 
 def is_blacklisted_token(
     session: Session,
