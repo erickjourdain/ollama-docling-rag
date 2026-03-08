@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import shutil
 import uuid
@@ -155,7 +156,8 @@ class CollectionService:
 
             # Suppression des fichiers sur le disque
             md_dir = Path(settings.STATIC_DIR) / collection.name
-            shutil.rmtree(md_dir, ignore_errors=False)
+            if (os.path.exists(md_dir)):
+                shutil.rmtree(md_dir, ignore_errors=False)
 
             # Commit final
             session.commit()

@@ -13,7 +13,12 @@ class CollectionCreate(BaseModel):
         max_length=25,
         description="Nom de la collection (caractères spéciaux et espaces interdits hors _ et -)",
     )
-    description: str | None = Field(..., description="Description du contenu de la collection")
+    description: str | None = Field(
+        None, 
+        description="Description du contenu de la collection",
+        min_length=25,
+        max_length=128
+    )
 
     @field_validator('name')
     @classmethod

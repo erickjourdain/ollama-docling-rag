@@ -250,7 +250,7 @@ async def count_collection_documents(
         )
         
 @router_collection.delete(
-        "",
+        "/{collection_name}",
         summary="Supprime une collection / table",
         description="""Supression d'une collection de la base de données""",
         response_model=bool

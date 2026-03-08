@@ -2,6 +2,7 @@ from typing import List, Sequence
 import uuid
 import chromadb
 from chromadb import Collection, QueryResult
+from chromadb.errors import NotFoundError
 from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 from chromadb.api.types import EmbeddingFunction
 
@@ -51,10 +52,13 @@ class DbVectorielleService:
             bool: Collection supprimée avec succès
         """
         try:
+            self.client.get_collection(name=collection_name)
             self.client.delete_collection(name=collection_name)
             return True
-        except Exception as e:
-            raise Exception(e)
+        except NotFoundError:
+            return False
+        except Exception as ex:
+            raise Exception(ex)
         
     def query_collection(self, query: str, collection_name: str) -> QueryResult:
         """Interrogation d'une collection de la base de données

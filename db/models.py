@@ -61,7 +61,7 @@ class Job(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, index=True)
     status: Mapped[str] = mapped_column(default="queued")  
-    progress: Mapped[str] = mapped_column(default="conversion")
+    progress: Mapped[str] = mapped_column(default="waiting")
     logs: Mapped[list] = mapped_column(JSON, default=list)
     type: Mapped[str] = mapped_column(Text)
     input_data: Mapped[str] = mapped_column(JSON)
