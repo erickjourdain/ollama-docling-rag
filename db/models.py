@@ -24,7 +24,7 @@ class CollectionMetadata(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(25), unique=True, nullable=False)
-    description: Mapped[str] = mapped_column(Text,)
+    description: Mapped[str] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(Text, ForeignKey("users.id"), nullable=False)
     creator: Mapped[User] = relationship("User", lazy="joined")
     date_creation: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

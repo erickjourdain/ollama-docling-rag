@@ -16,13 +16,12 @@ class CollectionCreate(BaseModel):
     description: str | None = Field(
         None, 
         description="Description du contenu de la collection",
-        min_length=25,
         max_length=128
     )
 
     @field_validator('name')
     @classmethod
-    def validate_collection_name(cls, v: str) -> str:
+    def validate_name(cls, v: str) -> str:
         # Regex : ^[a-zA-Z0-9]+$ 
         # Signifie : commence par début de ligne (^), 
         # contient uniquement des lettres ou chiffres ([a-zA-Z0-9]+), 
@@ -30,6 +29,15 @@ class CollectionCreate(BaseModel):
         if not re.match(r'^[a-zA-Z0-9_-]+$', v):
             raise ValueError(
                 "Le nom de la collection ne doit contenir que des lettres et des chiffres (pas d'espaces ni de caractères spéciaux)."
+            )
+        return v
+    
+    @field_validator('description')
+    @classmethod
+    def validate_description(cls, v: str | None) -> str | None:
+        if v is not None and len(v) < 25:
+            raise ValueError(
+                "La description doit contenir au moins 25 caractères."
             )
         return v
 
