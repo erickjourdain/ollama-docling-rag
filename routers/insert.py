@@ -8,6 +8,7 @@ from core.exceptions import RAGException
 from core.utility import delete_file
 from core.logging import logger
 from db.models import User
+from dependencies.jobwebsocket import get_job_ws_manager
 from dependencies.sqlite_session import get_db
 from dependencies.worker import get_workers
 from dependencies.role_checker import allow_admin
@@ -15,6 +16,7 @@ from repositories import job_repository
 from schemas.collection import CollectionModel
 from schemas import InsertResponse
 from services import ConversionService, CollectionService
+from services.job_websocket_manager import JobWebSocketManager
 from worker.insert_doc import insert_doc
 
 router_insert = APIRouter(prefix="/insert", tags=["Insertion fichier"])
@@ -33,7 +35,8 @@ async def process_file(
     collection_name: str = "",
     user_admin: User = Depends(allow_admin),
     session: Session = Depends(get_db),
-    executor: ThreadPoolExecutor = Depends(get_workers)
+    executor: ThreadPoolExecutor = Depends(get_workers),
+    job_manager: JobWebSocketManager = Depends(get_job_ws_manager)
 ) -> InsertResponse:
     """
     Mise en attente d'un fichier dans la file d'attente de traitement 
@@ -88,6 +91,14 @@ async def process_file(
             },
             type="insertion"
         )
+        await job_manager.send_update(
+            job_id=job_id,
+            data={
+                "job_id": job_id,
+                "status": "queued",
+                "progress": "waiting"
+            }
+        )
         
         # 5. Mise en attente du document dans la pile de traitement
         executor.submit(insert_doc,
@@ -96,7 +107,8 @@ async def process_file(
             doc_id=str(doc_id),
             collection=collection,
             job_id=job_id,
-            user_id=user_admin.id
+            user_id=user_admin.id,
+            job_manager=job_manager
         )
 
         return InsertResponse(job_id=job_id)

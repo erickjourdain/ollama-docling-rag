@@ -11,15 +11,17 @@ from repositories.collections_repository import CollectionRepository
 from repositories.job_repository import get_job
 from schemas import CollectionModel
 from services import ChunkingService, ConversionService, DbVectorielleService, JobService
+from services.job_websocket_manager import JobWebSocketManager
 
 
-def insert_doc(
+async def insert_doc(
     file_path: Path,
     filename: str,
     doc_id: str,
     collection: CollectionModel,
     job_id: str,
     user_id: str,
+    job_manager: JobWebSocketManager
 ):
     """Insertion d'un fichier dans la base de connaissance
 
@@ -47,7 +49,15 @@ def insert_doc(
             job.progress = "initialisation"
             job.status = "processing"
             session.commit()  
-            JobService.add_job_log(session, job_id, f"Démarrage du traitement pour {filename}")     
+            JobService.add_job_log(session, job_id, f"Démarrage du traitement pour {filename}")
+            await job_manager.send_update(
+                job_id=job_id,
+                data={
+                    "job_id": job_id,
+                    "status": "processing",
+                    "progress": "initialisation"
+                }
+            )   
 
             db_vector_service = DbVectorielleService(
                 chroma_db=settings.CHROMA_DB,
@@ -59,6 +69,14 @@ def insert_doc(
             job.progress = "file conversion"
             JobService.add_job_log(session, job_id, "Lancement conversion en markdown")   
             session.commit()
+            await job_manager.send_update(
+                job_id=job_id,
+                data={
+                    "job_id": job_id,
+                    "status": "file conversion",
+                    "progress": "initialisation"
+                }
+            )   
 
             conversion_result = ConversionService.convert_to_md(
                 file_path=file_path, 
@@ -69,7 +87,15 @@ def insert_doc(
             # Enregistrement des informations liées au document inséré
             job.progress = "add metadata"
             session.commit()
-            JobService.add_job_log(session, job_id, "Ajout des métadatas dans la base")   
+            JobService.add_job_log(session, job_id, "Ajout des métadatas dans la base")
+            await job_manager.send_update(
+                job_id=job_id,
+                data={
+                    "job_id": job_id,
+                    "status": "add metadata",
+                    "progress": "initialisation"
+                }
+            )   
 
             #id=str(uuid.uuid4())
             document = DocumentMetadata(
@@ -88,7 +114,15 @@ def insert_doc(
             # chunking du document
             job.progress="chunking"
             session.commit()
-            JobService.add_job_log(session, job_id, "Début du découpage (chunking)")  
+            JobService.add_job_log(session, job_id, "Début du découpage (chunking)")
+            await job_manager.send_update(
+                job_id=job_id,
+                data={
+                    "job_id": job_id,
+                    "status": "chunking",
+                    "progress": "initialisation"
+                }
+            )   
 
             chunking_service = ChunkingService(filename=filename)
             chunking_result = chunking_service.basic_chunking(
@@ -100,7 +134,15 @@ def insert_doc(
             # Enregistrement des chunks dans la base de données vectorielles
             job.progress="embeddings"
             session.commit()
-            JobService.add_job_log(session, job_id, f"Lancement des embeddings sur {settings.LLM_EMBEDDINGS_MODEL}...")  
+            JobService.add_job_log(session, job_id, f"Lancement des embeddings sur {settings.LLM_EMBEDDINGS_MODEL}...")
+            await job_manager.send_update(
+                job_id=job_id,
+                data={
+                    "job_id": job_id,
+                    "status": "embeddings",
+                    "progress": "initialisation"
+                }
+            )   
 
             db_vector_service.insert_chunk(
                 collection_name=collection.name,
@@ -117,6 +159,14 @@ def insert_doc(
             job.finished_at=datetime.now()
             session.commit()
             JobService.add_job_log(session, job_id, f"Traitement terminé en {ellapsed_time} s")
+            await job_manager.send_update(
+                job_id=job_id,
+                data={
+                    "job_id": job_id,
+                    "status": "completed",
+                    "progress": None
+                }
+            )  
 
         except RAGException as re:
             session.rollback()
@@ -124,6 +174,14 @@ def insert_doc(
             job.status="failed"
             job.error=str(re)
             session.commit()
+            await job_manager.send_update(
+                job_id=job_id,
+                data={
+                    "job_id": job_id,
+                    "status": "failed",
+                    "progress": None
+                }
+            )  
             logger.error(f"Job {job_id} échoué : {re.message}")
             
         except Exception as e:
@@ -132,4 +190,12 @@ def insert_doc(
             job.status="failed"
             job.error=str(e)
             session.commit()
+            await job_manager.send_update(
+                job_id=job_id,
+                data={
+                    "job_id": job_id,
+                    "status": "failed",
+                    "progress": None
+                }
+            )  
             logger.critical(f"Erreur système majeure sur job {job_id}", exc_info=True)

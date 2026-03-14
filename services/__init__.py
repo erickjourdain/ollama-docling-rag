@@ -6,6 +6,7 @@ from .health_service import HealthService
 from .conversion_service import ConversionService
 from .user_service import UserService
 from .job_service import JobService
+from .job_websocket_manager import JobWebSocketManager
 
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     "LlmService",
     "CollectionService",
     "UserService",
-    "JobService"
+    "JobService",
+    "JobWebSocketManager"
 ]

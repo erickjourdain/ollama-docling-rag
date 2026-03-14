@@ -26,7 +26,7 @@ from routers import (
 )
 from core.config import settings
 from repositories.job_repository import cleanup_old_jobs
-from services import UserService, DbVectorielleService
+from services import UserService, DbVectorielleService, JobWebSocketManager
 
 load_dotenv()
 
@@ -43,6 +43,8 @@ async def lifespan(app: FastAPI):
     )
     # Définition du nombre de workers disponibles pour l'application
     app.state.executor = ThreadPoolExecutor(max_workers=settings.MAX_WORKER)
+    # Initialisation du gestionnaire websocket
+    app.state.job_ws_manager = JobWebSocketManager()
     # Création de l'administrateur au premier démarrage de l'application
     # Nettoyage des anciens jobs à chaque démarrage de l'application
     with SessionLocalSync() as session:
