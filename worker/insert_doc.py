@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from pathlib import Path
 
@@ -10,9 +11,10 @@ from dependencies.sqlite_session import SessionLocalSync
 from repositories.collections_repository import CollectionRepository
 from repositories.job_repository import get_job
 from schemas import CollectionModel
-from services import ChunkingService, ConversionService, DbVectorielleService, JobService
-from services.job_websocket_manager import JobWebSocketManager
-
+from schemas.job import JobOut
+from services import ChunkingService, ConversionService, DbVectorielleService
+from services.user_websocket_manager import UserWebSocketManager
+from services.job_service import JobService
 
 async def insert_doc(
     file_path: Path,
@@ -21,7 +23,7 @@ async def insert_doc(
     collection: CollectionModel,
     job_id: str,
     user_id: str,
-    job_manager: JobWebSocketManager
+    user_ws_manager: UserWebSocketManager
 ):
     """Insertion d'un fichier dans la base de connaissance
 
@@ -32,6 +34,7 @@ async def insert_doc(
         collection (CollectionModel): collection dans laquelle insérer le document 
         job_id (str): identifiant du job d'insertion
         user_id (str): identfiant de l'utilisateur
+        user_ws_manager (UserWebSocketManager): magasin de gestion des websockets utilisateurs
 
     Raises:
         Exception: Erreur levée lors de l'insertion du document
@@ -50,13 +53,9 @@ async def insert_doc(
             job.status = "processing"
             session.commit()  
             JobService.add_job_log(session, job_id, f"Démarrage du traitement pour {filename}")
-            await job_manager.send_update(
-                job_id=job_id,
-                data={
-                    "job_id": job_id,
-                    "status": "processing",
-                    "progress": "initialisation"
-                }
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
             )   
 
             db_vector_service = DbVectorielleService(
@@ -69,16 +68,13 @@ async def insert_doc(
             job.progress = "file conversion"
             JobService.add_job_log(session, job_id, "Lancement conversion en markdown")   
             session.commit()
-            await job_manager.send_update(
-                job_id=job_id,
-                data={
-                    "job_id": job_id,
-                    "status": "file conversion",
-                    "progress": "initialisation"
-                }
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
             )   
 
-            conversion_result = ConversionService.convert_to_md(
+            conversion_result = await asyncio.to_thread(
+                ConversionService.convert_to_md,
                 file_path=file_path, 
                 collection_name=collection.name,
                 doc_id=doc_id
@@ -88,14 +84,10 @@ async def insert_doc(
             job.progress = "add metadata"
             session.commit()
             JobService.add_job_log(session, job_id, "Ajout des métadatas dans la base")
-            await job_manager.send_update(
-                job_id=job_id,
-                data={
-                    "job_id": job_id,
-                    "status": "add metadata",
-                    "progress": "initialisation"
-                }
-            )   
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            ) 
 
             #id=str(uuid.uuid4())
             document = DocumentMetadata(
@@ -104,7 +96,7 @@ async def insert_doc(
                 collection_id=collection.id,
                 inserted_by=user_id,
                 date_insertion=datetime.now(),
-                md5=hash_file(file_path=file_path)
+                md5=await asyncio.to_thread(hash_file, file_path=file_path)
             )
             document = CollectionRepository.add_document(
                 session=session, 
@@ -115,17 +107,14 @@ async def insert_doc(
             job.progress="chunking"
             session.commit()
             JobService.add_job_log(session, job_id, "Début du découpage (chunking)")
-            await job_manager.send_update(
-                job_id=job_id,
-                data={
-                    "job_id": job_id,
-                    "status": "chunking",
-                    "progress": "initialisation"
-                }
-            )   
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            )  
 
             chunking_service = ChunkingService(filename=filename)
-            chunking_result = chunking_service.basic_chunking(
+            chunking_result = await asyncio.to_thread(
+                chunking_service.basic_chunking,
                 document=conversion_result.document, 
                 document_id=doc_id
             )
@@ -135,16 +124,13 @@ async def insert_doc(
             job.progress="embeddings"
             session.commit()
             JobService.add_job_log(session, job_id, f"Lancement des embeddings sur {settings.LLM_EMBEDDINGS_MODEL}...")
-            await job_manager.send_update(
-                job_id=job_id,
-                data={
-                    "job_id": job_id,
-                    "status": "embeddings",
-                    "progress": "initialisation"
-                }
-            )   
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            ) 
 
-            db_vector_service.insert_chunk(
+            await asyncio.to_thread(
+                db_vector_service.insert_chunk,
                 collection_name=collection.name,
                 chunks=chunking_result.chunks
             )
@@ -159,43 +145,31 @@ async def insert_doc(
             job.finished_at=datetime.now()
             session.commit()
             JobService.add_job_log(session, job_id, f"Traitement terminé en {ellapsed_time} s")
-            await job_manager.send_update(
-                job_id=job_id,
-                data={
-                    "job_id": job_id,
-                    "status": "completed",
-                    "progress": None
-                }
-            )  
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            ) 
 
         except RAGException as re:
             session.rollback()
             job.progress="done"
             job.status="failed"
-            job.error=str(re)
+            job.error_message=str(re)
             session.commit()
-            await job_manager.send_update(
-                job_id=job_id,
-                data={
-                    "job_id": job_id,
-                    "status": "failed",
-                    "progress": None
-                }
-            )  
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            ) 
             logger.error(f"Job {job_id} échoué : {re.message}")
             
         except Exception as e:
             session.rollback()
             job.progress="done"
             job.status="failed"
-            job.error=str(e)
+            job.error_message=str(e)
             session.commit()
-            await job_manager.send_update(
-                job_id=job_id,
-                data={
-                    "job_id": job_id,
-                    "status": "failed",
-                    "progress": None
-                }
-            )  
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            ) 
             logger.critical(f"Erreur système majeure sur job {job_id}", exc_info=True)

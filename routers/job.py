@@ -1,39 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from core.logging import logger
 from db.models import User
 from dependencies.sqlite_session import get_db
 from dependencies.role_checker import allow_admin, allow_any_user
-from dependencies.jobwebsocket import get_job_ws_manager
 from schemas.response import JobCleaningResponse
 from services import JobService
 from schemas import JobOut
 
 
 router_job = APIRouter(prefix="/jobs", tags=["Jobs"])
-
-@router_job.websocket("/ws/jobs/{job_id}")
-async def websocket_job_updates(
-    websocket: WebSocket,
-    job_id: str,
-    manager = Depends(get_job_ws_manager)
-):
-    """Route de connexion à une socket de suivi de l'état d'avancement d'un job
-
-    Args:
-        websocket (WebSocket): socket
-        job_id (str): identfiant du job à suivre
-        manager (_type_, optional): magasin de gestion des sockets de suivi des jobs. Defaults to Depends(get_ws_manager).
-    """
-    await manager.connect(job_id, websocket)
-
-    try:
-        while True:
-            await websocket.receive_text()  # garde connexion ouverte
-    except WebSocketDisconnect:
-        manager.disconnect(job_id, websocket)
-
 
 @router_job.get(
         "/{job_id}",

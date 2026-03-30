@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from .user import UserOut
 from .document import DocumentModel
 from .collection import CollectionModel
+from .query import QueryModel
 
 class ProcessingResponse(BaseModel):
     """Réponse après le traitement d'un PDF"""
@@ -11,8 +12,8 @@ class ProcessingResponse(BaseModel):
     conversion_time: float = Field(..., description="Durée de la conversion pdf to md")
     embedding_time: float = Field(..., description="Durée de l'embedding")
 
-class InsertResponse(BaseModel):
-    """Réponse insertion d'un nouveau document"""
+class JobResponse(BaseModel):
+    """Réponse insertion d'un nouveau job"""
     job_id: str = Field(..., description="Identifiant du job d'insertion")
 
 class JobCleaningResponse(BaseModel):
@@ -34,3 +35,8 @@ class UsersListResponse(BaseModel):
     """Réponse pour la liste des utilisateurs"""
     data: list[UserOut] = Field(..., description="Liste des utilisateurs")
     count: int = Field(..., description="Nombre total d'utilisateurs")
+
+class QueryListResponse(BaseModel):
+    """Réponse pour la liste des requêtes"""
+    data: list[QueryModel] = Field(..., description="Liste des requêtes")
+    count: int = Field(..., description="Nombre total de requêtes")

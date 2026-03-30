@@ -8,14 +8,18 @@ from core.config import settings
 from core.logging import logger
 from core.exceptions import RAGException
 from dependencies.sqlite_session import SessionLocalSync
+from repositories.query_repository import create_query
 from repositories.job_repository import get_job
-from services import DbVectorielleService, LlmService, JobService
+from schemas import JobOut
+from services import DbVectorielleService, LlmService, JobService, UserWebSocketManager
 
-def query_collection(
+async def query_collection(
     job_id: str,
     query: str,
     model: str,
-    collection_name: str
+    collection_name: str,
+    user_id: str,
+    user_ws_manager: UserWebSocketManager
 ):
     """Interrogation de la base de connaissance via une requête utilisateur
 
@@ -24,6 +28,8 @@ def query_collection(
         query (str): requête (prompt) de l'utilisateur
         model (str): modèle à utiliser pour la génération de la réponse
         collection_name (str): nom de la collection à interroger
+        user_id (str): identfiant de l'utilisateur
+        user_ws_manager (UserWebSocketManager): magasin de gestion des websockets utilisateurs
 
     Raises:
         Exception: Erreur levée lors de la génération de la réponse
@@ -41,7 +47,11 @@ def query_collection(
             job.status = "processing"
             session.commit()
             JobService.add_job_log(session, job_id, "Démarrage du traitement de la requête")
-    
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            ) 
+
             db_vector_service = DbVectorielleService(
                 chroma_db=settings.CHROMA_DB,
                 embedding_model=settings.LLM_EMBEDDINGS_MODEL,
@@ -51,7 +61,11 @@ def query_collection(
             # Reformulation de la requête pour interrogation base vectorielle
             job.progress = "query reformulation"
             session.commit()
-            JobService.add_job_log(session, job_id, "Reformulation de la requête")   
+            JobService.add_job_log(session, job_id, "Reformulation de la requête")
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            )    
 
             llm_service =  LlmService()
             vectordb_query = llm_service.vectordb_query(query=query, model=model)
@@ -59,7 +73,11 @@ def query_collection(
             # Requête pour interrogation base vectorielle
             job.progress = "query database"
             session.commit()
-            JobService.add_job_log(session, job_id, "Interrogation de la base vectorielle")   
+            JobService.add_job_log(session, job_id, "Interrogation de la base vectorielle")
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            )    
 
             result = db_vector_service.query_collection(
                 query=vectordb_query, 
@@ -68,7 +86,11 @@ def query_collection(
 
             documents = result.get("documents")
             metadatas = result.get("metadatas")
-            JobService.add_job_log(session, job_id, "Vérification des documents retournés")   
+            JobService.add_job_log(session, job_id, "Vérification des documents retournés")
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            )    
 
             # Vérification que la requête à retourner des éléments
             if (
@@ -77,7 +99,7 @@ def query_collection(
                 or not metadatas
                 or not metadatas[0]
             ):
-                job.result = GenerateResponse(
+                result = GenerateResponse(
                     model=model,
                     created_at=datetime.now().isoformat(),
                     done=False,
@@ -100,14 +122,31 @@ def query_collection(
                 job.progress = "done"
                 job.status = "completed"
                 job.finished_at = datetime.now()
+                create_query(
+                    session=session,
+                    user_id=user_id,
+                    collection_name=collection_name,
+                    job_id=job_id,
+                    question=query,
+                    answer="Aucune donnée trouvée permettant de répondre à la question posée",
+                    model=model
+                )
                 session.commit()
-                JobService.add_job_log(session, job_id, "Fin du traitement: aucun document trouvé")   
+                JobService.add_job_log(session, job_id, "Fin du traitement: aucun document trouvé")
+                await user_ws_manager.send_to_user(
+                    user_id=user_id,
+                    data=JobOut.model_validate(job)
+                )
                 return
             
             # Reranking des documents
             job.progress = "reranking"
             session.commit()
-            JobService.add_job_log(session, job_id, "Reranking des documents")   
+            JobService.add_job_log(session, job_id, "Reranking des documents")
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            )  
 
             documents = documents[0]
             metadatas = metadatas[0]
@@ -123,7 +162,11 @@ def query_collection(
             # Génération de la réponse
             job.progress = "generation answer"
             session.commit()
-            JobService.add_job_log(session, job_id, "Interrogation du LLM")   
+            JobService.add_job_log(session, job_id, "Interrogation du LLM")
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            )   
 
             response = llm_service.create_answer(
                 docs=reranked_docs, 
@@ -137,22 +180,43 @@ def query_collection(
             job.progress = "done"
             job.status = "completed"
             job.finished_at = datetime.now()
-            job.result = response.model_dump(mode="json")
-            JobService.add_job_log(session, job_id, f"Traitement terminé en {ellapsed_time} s")   
+            result = response.model_dump(mode="json")
+            JobService.add_job_log(session, job_id, f"Traitement terminé en {ellapsed_time} s")
+            create_query(
+                session=session,
+                user_id=user_id,
+                collection_name=collection_name,
+                job_id=job_id,
+                question=query,
+                answer=response.response,
+                model=model
+            )
             session.commit()
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            ) 
 
         except RAGException as re:
             session.rollback()
             job.progress="done"
             job.status="failed"
-            job.error=str(re)
+            job.error_message=str(re)
             session.commit()
             logger.error(f"Job {job_id} échoué : {re.message}")
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            ) 
             
         except Exception as e:
             session.rollback()
             job.progress="done"
             job.status="failed"
-            job.error=str(e)
+            job.error_message=str(e)
             session.commit()
             logger.critical(f"Erreur système majeure sur job {job_id}", exc_info=True)
+            await user_ws_manager.send_to_user(
+                user_id=user_id,
+                data=JobOut.model_validate(job)
+            )

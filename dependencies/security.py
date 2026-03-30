@@ -36,6 +36,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        print(f"token: {token}")
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: str | None = payload.get("sub")
         if user_id is None:
@@ -50,7 +51,8 @@ async def get_current_user(
         if is_blacklisted_token:
             logger.warning(f"Tentative de connexion avec un token blacklisé: {jti}")
             raise credentials_exception 
-    except JWTError:
+    except JWTError as e:
+        print(f"erreur lors du décodage du token: {e}")
         raise credentials_exception
         
     user = db.query(User).filter(User.id == user_id).first()

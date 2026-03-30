@@ -9,16 +9,18 @@ from .job import JobOut
 from .chunk import (ChunkMetada, Chunk, ChunkingResponse)
 from .health import (OllamaHealth, HealthResponse)
 from .response import (
-    InsertResponse, 
+    JobResponse, 
     CollectionListResponse, 
     DocumentListResponse,
-    UsersListResponse
+    UsersListResponse,
+    QueryListResponse
 )
 from .conversion import ConvertPdfResponse
 from .filters import CollectionFilters, DocumentFilters, UserFilters
+from .query import QueryModel
 
 __all__ = [
-    "InsertResponse",
+    "JobResponse",
     "QueryRequest",
     "Model",
     "UserOut",
@@ -40,5 +42,7 @@ __all__ = [
     "DocumentFilters",
     "DocumentListResponse",
     "UserFilters",
-    "UsersListResponse"
+    "UsersListResponse",
+    "QueryModel",
+    "QueryListResponse"
 ]

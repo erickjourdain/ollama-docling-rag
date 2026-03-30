@@ -5,8 +5,10 @@ from .collection_service import CollectionService
 from .health_service import HealthService
 from .conversion_service import ConversionService
 from .user_service import UserService
+from .job_runner import JobRunner
 from .job_service import JobService
-from .job_websocket_manager import JobWebSocketManager
+from .user_websocket_manager import UserWebSocketManager
+from .insertion_service import InsertionService
 
 
 __all__ = [
@@ -18,5 +20,7 @@ __all__ = [
     "CollectionService",
     "UserService",
     "JobService",
-    "JobWebSocketManager"
+    "JobRunner",
+    "UserWebSocketManager",
+    "InsertionService"
 ]

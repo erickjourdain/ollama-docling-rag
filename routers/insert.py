@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
-from concurrent.futures import ThreadPoolExecutor
 import uuid
 
 from core import security
@@ -8,22 +7,19 @@ from core.exceptions import RAGException
 from core.utility import delete_file
 from core.logging import logger
 from db.models import User
-from dependencies.jobwebsocket import get_job_ws_manager
+from dependencies.job_runner import get_job_runner
+from dependencies.user_websocket import get_user_ws_manager
 from dependencies.sqlite_session import get_db
-from dependencies.worker import get_workers
 from dependencies.role_checker import allow_admin
 from repositories import job_repository
-from schemas.collection import CollectionModel
-from schemas import InsertResponse
-from services import ConversionService, CollectionService
-from services.job_websocket_manager import JobWebSocketManager
-from worker.insert_doc import insert_doc
+from schemas import CollectionModel, JobResponse, JobOut
+from services import ConversionService, CollectionService, JobRunner, UserWebSocketManager, InsertionService
 
 router_insert = APIRouter(prefix="/insert", tags=["Insertion fichier"])
 
 @router_insert.post(
     "/pdf",
-    response_model=InsertResponse,
+    response_model=JobResponse,
     summary="Lancer le traitement d'un document pour stockage dans la base de connaissances",
     description="""
     Conversion d'un document en markdown via Docling, stockage du fichier converti sur le serveur,
@@ -35,12 +31,28 @@ async def process_file(
     collection_name: str = "",
     user_admin: User = Depends(allow_admin),
     session: Session = Depends(get_db),
-    executor: ThreadPoolExecutor = Depends(get_workers),
-    job_manager: JobWebSocketManager = Depends(get_job_ws_manager)
-) -> InsertResponse:
-    """
-    Mise en attente d'un fichier dans la file d'attente de traitement 
-    pour intégration dans la base de connaissances
+    user_ws_manager: UserWebSocketManager = Depends(get_user_ws_manager),
+    job_runner: JobRunner = Depends(get_job_runner)
+) -> JobResponse:
+    """Processus d'insertion d'un fichier dans la base de connaissances
+
+    Args:
+        file (UploadFile, optional): fichier à insérer.
+        collection_name (str, optional): nom de la collection pour insertion du fichier. Defaults to "".
+        user_admin (User, optional): utilisateur courant. Defaults to Depends(allow_admin).
+        session (Session, optional): session d'accès à la base de données. Defaults to Depends(get_db).
+        user_ws_manager (UserWebSocketManager, optional): magasin de gestion des sockets utilisateurs. Defaults to Depends(get_user_ws_manager).
+        job_runner (JobRunner, optional): service de gestion des tâches. Defaults to Depends(get_job_runner).
+
+    Raises:
+        HTTPException: collection inexistante
+        HTTPException: Fichier déjà existant dans la collection
+        he: Erreur lors de l'éxecution de la fonction
+        HTTPException: Erreur lors de l'insertion du fichier
+        HTTPException: Erreur lors de l'éxécution de la fonction
+
+    Returns:
+        JobResponse: identifiant de la nouvelle tâche
     """
     try:
         # 1. Vérification des différents élements avant de lancer le job de conversion
@@ -80,38 +92,30 @@ async def process_file(
             )
         
         # 4. Création du job dans la base de données
-        job_repository.create_job(
+        new_job = job_repository.create_job(
             session=session, 
-            job_id=job_id, 
-            input_data={
-                'filename': file.filename,
-                'doc_id': str(doc_id),
-                'collection': collection.name,
-                'user': user_admin.username
-            },
+            job_id=job_id,
+            user_id=user_admin.id,
             type="insertion"
         )
-        await job_manager.send_update(
-            job_id=job_id,
-            data={
-                "job_id": job_id,
-                "status": "queued",
-                "progress": "waiting"
-            }
+        await user_ws_manager.send_to_user(
+            user_id=user_admin.id,
+            data=JobOut.model_validate(new_job)
         )
         
+        print("Vérification fichier terminée")
         # 5. Mise en attente du document dans la pile de traitement
-        executor.submit(insert_doc,
+        await job_runner.submit(InsertionService.run_insert_doc,
             file_path=file_path,
             filename=file.filename or 'unknown',
             doc_id=str(doc_id),
             collection=collection,
             job_id=job_id,
             user_id=user_admin.id,
-            job_manager=job_manager
+            user_ws_manager=user_ws_manager
         )
 
-        return InsertResponse(job_id=job_id)
+        return JobResponse(job_id=job_id)
 
     except HTTPException as he:
         raise he

@@ -8,7 +8,7 @@ from db.models import Job
 def create_job(
     session: Session,
     job_id: str,
-    input_data: dict[str, str | None] | None,
+    user_id: str,
     type: str
 ) -> Job:
     """Création d'un nouveau job pour les workers
@@ -16,13 +16,13 @@ def create_job(
     Args:
         session (Session): session d'accès à la base de données
         job_id (str): identifiant du job
-        input_data (dict[str, str  |  None] | None): dictionnaire des données d'entrée du worker
+        user_id (str): identifiant du créateur du job
         type (str): type de job "insert" ou "query"
 
     Returns:
         Job: le job nouvellement créé
     """
-    new_job=Job(id=job_id, input_data=input_data, type=type)
+    new_job=Job(id=job_id, user_id=user_id, type=type)
     session.add(new_job)
     session.commit()
     session.refresh(new_job)

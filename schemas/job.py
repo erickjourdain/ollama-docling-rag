@@ -1,6 +1,5 @@
 from typing import List, Optional
 
-from ollama import GenerateResponse
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -26,9 +25,8 @@ class JobOut(BaseModel):
     status: str  = Field(..., description="Statut d'avancement")
     progress: str  = Field(..., description="Etat de traitement courant")
     logs: List[JobLogOut] = Field(default_factory=list, description="Historique détaillé")
-    input_data: JobInput | None  = Field(..., description="Données d'entrée du job")
-    result: GenerateResponse | None = Field(..., description="Résultat du traitement")
-    error: str  | None= Field(..., description="Description de l'erreur de traitement")
+    attemps: int = Field(..., description="Nomnbre d'essais")
+    error_message: str  | None= Field(..., description="Description de l'erreur de traitement")
     created_at: datetime = Field(..., description="Date de début du traitement")
     finished_at: datetime | None = Field(..., description="Date de fin du traitement")
 

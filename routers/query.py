@@ -1,4 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -7,20 +6,20 @@ from core.exceptions import RAGException
 from core.config import settings
 from core.logging import logger
 from db.models import User
+from dependencies.job_runner import get_job_runner
 from dependencies.sqlite_session import get_db
-from dependencies.worker import get_workers
+from dependencies.user_websocket import get_user_ws_manager
 from dependencies.role_checker import allow_any_user
 from repositories import job_repository
-from schemas import QueryRequest, CollectionModel
-from schemas.response import InsertResponse
-from services import CollectionService, LlmService
+from schemas import QueryRequest, CollectionModel, JobResponse, JobOut
+from services import CollectionService, LlmService, JobRunner, UserWebSocketManager
 from worker.query_collection import query_collection
 
 router_query = APIRouter(prefix="/query", tags=["Query"])
 
 @router_query.post(
         "",
-        response_model=InsertResponse,
+        response_model=JobResponse,
         summary="Interroge la base de connaissances",
         description="""
         Excute une requête sur la base de connaissances:
@@ -28,12 +27,13 @@ router_query = APIRouter(prefix="/query", tags=["Query"])
         - envoi du contexte au LLM pour création de la réponse
         """
 )
-def query(
+async def query(
     payload: QueryRequest,
     user: User = Depends(allow_any_user),
     session: Session = Depends(get_db),
-    executor: ThreadPoolExecutor = Depends(get_workers)
-    ) -> InsertResponse:
+    user_ws_manager: UserWebSocketManager = Depends(get_user_ws_manager),
+    job_runner: JobRunner = Depends(get_job_runner)
+    ) -> JobResponse:
     """Exécution d'une requête utilisateur sur le système RAG
 
     Args:
@@ -43,13 +43,14 @@ def query(
             model: nom du modèle à utiliser (optionel)
         user (User, optional): utilisateur courant. Defaults to Depends(allow_any_user).
         session (Session, optional): session de connection à la base de données. Defaults to Depends(get_db).
-        executor (ThreadPoolExecutor, optional): pool de threads pour l'exécution des tâches en arrière-plan. Defaults to Depends(get_workers).
+        user_ws_manager (UserWebSocketManager, optional): magasin de gestion des sockets utilisateurs. Defaults to Depends(get_user_ws_manager).
+        job_runner (JobRunner, optional): service de gestion des tâches. Defaults to Depends(get_job_runner).
 
     Raises:
         HTTPException: Erreur lors de l'éxecution de la fonction
 
     Returns:
-        InsertResponse | None: identifiant du job 
+        JobResponse: identifiant de la nouvelle tâche
     """
     try:
         # 1. Vérification de la présence de la collection
@@ -77,27 +78,28 @@ def query(
 
         # 3. Création du job dans la base de données
         job_id = str(uuid.uuid4())
-        job_repository.create_job(
+        new_job = job_repository.create_job(
             session=session, 
             job_id=job_id, 
-            input_data={
-                "query": payload.query,
-                "model": payload.model,
-                "collection": payload.collection_name,
-                "user": user.username
-            },
+            user_id=user.id,
             type="query"
+        )
+        await user_ws_manager.send_to_user(
+            user_id=user.id,
+            data=JobOut.model_validate(new_job)
         )
 
         # 4. Mise en attente de la requête dans la pile de traitement
-        executor.submit(query_collection,
+        await job_runner.submit(query_collection,
             job_id=job_id,
             query=payload.query,
             model=model,
-            collection_name=payload.collection_name
+            collection_name=payload.collection_name,
+            user_id=user.id,
+            user_ws_manager=user_ws_manager
         )
 
-        return InsertResponse(job_id=job_id)
+        return JobResponse(job_id=job_id)
 
     except HTTPException as he:
         raise he

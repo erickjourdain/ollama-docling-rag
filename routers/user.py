@@ -1,18 +1,73 @@
+import asyncio
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from jose import jwt
 from sqlalchemy.orm import Session
 
 from core.exceptions import RAGException
+from core.config import settings
 from core.logging import logger
 from db.models import User
 from dependencies.sqlite_session import get_db
 from schemas import UsersListResponse, UserOut, UserFilters, UserCreate, UserUpdate
 from dependencies.role_checker import allow_any_user, allow_admin
 from services.user_service import UserService
+from services.user_websocket_manager import UserWebSocketManager
 
 
 router_user = APIRouter(prefix="/users", tags=["users"])
+
+@router_user.websocket("/ws")
+async def websocket_endpoint(webocket: WebSocket, db: Session = Depends(get_db)):
+    """Route de connexion des websockets utilisateurs
+
+    Args:
+        webocket (WebSocket): websocket
+        db (Session, optional): session d'accès à la base de données. Defaults to Depends(get_db).
+    """
+
+    token = webocket.query_params.get("token")
+    print(f"websocket token: {token}")
+    user_id: str | None = None
+
+    if not token:
+        await webocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise Exception
+        jti: str | None = payload.get("jti")
+        if jti is None:
+            raise Exception
+        is_blacklisted_token = UserService.is_blacklisted_token(
+            session=db, 
+            jti=jti
+        )
+        if is_blacklisted_token:
+            logger.warning(f"Tentative de connexion avec un token blacklisé: {jti}")
+            raise Exception 
+    except Exception as e:
+        logger.error(f"Erreur décodage token websocket: {e}")
+        await webocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    if user_id is None:
+        return
+    
+    user_ws_manager: UserWebSocketManager = webocket.app.state.user_ws_manager        
+    await user_ws_manager.connect(user_id=user_id, websocket=webocket)
+    try:    
+        while True:
+            await asyncio.sleep(3600)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        user_ws_manager.disconnect(user_id=user_id, websocket=webocket)
+
 
 @router_user.get(
     "/me",

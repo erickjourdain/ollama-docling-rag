@@ -44,3 +44,4 @@ class JobService:
     @staticmethod    
     def cleanup_old_jobs(session: Session, days: int = 7) -> int:
         return job_repository.cleanup_old_jobs(session, days)
+    

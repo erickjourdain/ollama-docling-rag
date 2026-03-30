@@ -1,5 +1,4 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 import os
 
 from dotenv import load_dotenv
@@ -26,7 +25,7 @@ from routers import (
 )
 from core.config import settings
 from repositories.job_repository import cleanup_old_jobs
-from services import UserService, DbVectorielleService, JobWebSocketManager
+from services import UserService, DbVectorielleService, JobRunner, UserWebSocketManager
 
 load_dotenv()
 
@@ -41,10 +40,11 @@ async def lifespan(app: FastAPI):
         embedding_model=settings.LLM_EMBEDDINGS_MODEL,
         ollama_url=settings.OLLAMA_URL
     )
-    # Définition du nombre de workers disponibles pour l'application
-    app.state.executor = ThreadPoolExecutor(max_workers=settings.MAX_WORKER)
+    # Initialisation du service de gestion des jobs
+    app.state.job_runner = JobRunner()
+    asyncio.create_task(app.state.job_runner.start())
     # Initialisation du gestionnaire websocket
-    app.state.job_ws_manager = JobWebSocketManager()
+    app.state.user_ws_manager = UserWebSocketManager()
     # Création de l'administrateur au premier démarrage de l'application
     # Nettoyage des anciens jobs à chaque démarrage de l'application
     with SessionLocalSync() as session:
@@ -62,7 +62,6 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         logger.info("Tâche de nettoyage périodique annulée.")
         pass
-    app.state.executor.shutdown(wait=True)
     sync_engine.dispose()
     logger.info("Application arrêtée.")
 

@@ -12,8 +12,6 @@ from pypdf import PdfReader
 
 from .config import settings
 
-
-
 def create_access_token(subject: Union[str, Any]) -> str:
     """Création du jetond'accès à l'application
 
